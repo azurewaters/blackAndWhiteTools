@@ -1,6 +1,6 @@
 const env = process.env.NODE_ENV || "development";
 
-const productionPlugins = [require("cssnano")];
+const productionPlugins = [];
 
 module.exports = {
   plugins: [
