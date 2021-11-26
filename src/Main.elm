@@ -8,6 +8,7 @@ import Html.Events exposing (on, onClick, preventDefaultOn)
 import Html.Keyed as Keyed
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Encode as Encode
+import Svg.Attributes exposing (visibility)
 import Task
 
 
@@ -203,7 +204,7 @@ indexMaker model =
                 , class "bg-green-600 hover:bg-green-500 disabled:bg-gray-400"
                 , model.enableDownloadButton |> not |> disabled
                 ]
-                [ text "Download using Docx Load" ]
+                [ text "Download" ]
             ]
         ]
 
@@ -309,8 +310,8 @@ type Msg
     | CouldNotGetNumberOfPagesInListing Id
     | ClearAllButtonClicked
     | DownloadDocumentButtonClicked
-    | GotPagesOfPDFAsASetOfImages Pages
-    | CouldNotGetPagesOfPDFAsASetOfImages Id
+    | GotPagesOfListing Pages
+    | CouldNotGetPagesOfListing Id
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -462,7 +463,7 @@ update msg model =
                         getPageCountOfPDF (encodeDetailsForPageCount listing.id url)
 
                     else
-                        Cmd.none
+                        getTheImagesDimensions (Page listing.id 0 url 0 0)
             in
             ( { model | listings = updatedListings }, newCommand )
 
@@ -550,7 +551,7 @@ update msg model =
             in
             ( model, Encode.string (index ++ pages) |> generateADocument )
 
-        GotPagesOfPDFAsASetOfImages pages ->
+        GotPagesOfListing pages ->
             let
                 listingId : Int
                 listingId =
@@ -559,7 +560,7 @@ update msg model =
                             head.listingId
 
                         _ ->
-                            0
+                            -1
 
                 updatedListings : List Listing
                 updatedListings =
@@ -576,10 +577,20 @@ update msg model =
                 newPagesContents : Pages
                 newPagesContents =
                     List.append model.pages pages
-            in
-            ( { model | listings = updatedListings, pages = newPagesContents }, Cmd.none )
 
-        CouldNotGetPagesOfPDFAsASetOfImages listingId ->
+                enableDownloadButton : Bool
+                enableDownloadButton =
+                    listingsStillBeingProcessed updatedListings |> not
+            in
+            ( { model
+                | listings = updatedListings
+                , pages = newPagesContents
+                , enableDownloadButton = enableDownloadButton
+              }
+            , Cmd.none
+            )
+
+        CouldNotGetPagesOfListing listingId ->
             let
                 updatedListings : List Listing
                 updatedListings =
@@ -662,29 +673,39 @@ renderPages pagesToRender renderedPages thisPagesNumber =
 renderPage : Page -> Int -> String
 renderPage page pageNumber =
     let
-        maxHeight : Int
+        -- The units used in Word is dxa which is 1/20th of a point. Meaning, there are 20 dxas in 1 pt.
+        --  1 cm = 28.3465 pts
+        --  1 cm = 28.3464566929px @72px/inch
+        --  1 pt = 1.333 pixels
+        --  Unit converter: https://unit-converter.kurylk.in
+        maxHeight : Float
         maxHeight =
-            16837
+            -- In pts
+            --  297 mm is 841.89 pts. This is equivalent to 16837.79527559 twips.
+            29.7 * 28.3465
 
-        --  297 mm in Twips. Actually 16837.79527559.
-        maxWidth : Int
+        maxWidth : Float
         maxWidth =
-            11905
+            --  In pts
+            --  210 mm is 595.276 pts. This is equivalent to 11905.511811024 twips.
+            21 * 28.3456
 
-        --  210 mm in Twip. Actually 11905.511811024.
+        imageHeight : Float
+        imageHeight =
+            --  In pts
+            Basics.toFloat page.naturalHeight / 1.333
+
+        imageWidth : Float
+        imageWidth =
+            --  In pts
+            Basics.toFloat page.naturalWidth / 1.333
+
         ( finalHeight, finalWidth ) =
-            if page.naturalHeight > page.naturalWidth then
-                if page.naturalHeight > maxHeight then
-                    ( page.naturalHeight * (maxWidth // page.naturalWidth), maxWidth )
-
-                else
-                    ( page.naturalHeight, page.naturalWidth )
-
-            else if page.naturalWidth > maxWidth then
-                ( maxHeight, page.naturalWidth * (maxHeight // page.naturalHeight) )
-
-            else
-                ( page.naturalHeight, page.naturalWidth )
+            let
+                ratio =
+                    Basics.min (maxHeight / imageHeight) (maxWidth / imageWidth)
+            in
+            ( imageHeight * ratio, imageWidth * ratio )
     in
     """
     <page header="alignment: right; format:@pageNumber">
@@ -692,13 +713,9 @@ renderPage page pageNumber =
     </page>
     """
         |> String.replace "@pageNumber" (String.fromInt pageNumber)
-        |> String.replace "@height" (String.fromInt finalHeight)
-        |> String.replace "@width" (String.fromInt finalWidth)
+        |> String.replace "@height" (String.fromFloat finalHeight)
+        |> String.replace "@width" (String.fromFloat finalWidth)
         |> String.replace "@pageContents" page.contents
-
-
-
--- |> String.replace "@pageContents" "data:*/*;base64,V2hvIGF0ZSBhbGwgdGhlIHBpZT8="
 
 
 makeAnIndex : List Listing -> String
@@ -798,10 +815,16 @@ encodeDetailsForPageCount id urlEncodedFile =
 port getPageCountOfPDF : Encode.Value -> Cmd msg
 
 
+port getTheImagesDimensions : Page -> Cmd msg
+
+
 port getPagesOfPDFAsASetOfImages : Encode.Value -> Cmd msg
 
 
 port generateADocument : Encode.Value -> Cmd msg
+
+
+port testPDF : Encode.Value -> Cmd msg
 
 
 
@@ -814,10 +837,13 @@ port gotPageCountOfPDF : (Encode.Value -> msg) -> Sub msg
 port couldNotGetPageCountOfPDF : (Int -> msg) -> Sub msg
 
 
-port gotPagesOfPDFAsASetOfImages : (Encode.Value -> msg) -> Sub msg
+port gotImageDimensions : (Page -> msg) -> Sub msg
 
 
-port couldNotGetPagesOfPDFAsASetOfImages : (Int -> msg) -> Sub msg
+port gotPagesOfListing : (Encode.Value -> msg) -> Sub msg
+
+
+port couldNotGetPagesOfListing : (Int -> msg) -> Sub msg
 
 
 numberOfPagesInListingDecoder : Decoder NumberOfPagesInListing
@@ -860,11 +886,11 @@ decodeNumberOfPagesInListing value =
             Debug.log (Debug.toString e) NoOp
 
 
-decodePagesOfPDF : Decode.Value -> Msg
-decodePagesOfPDF value =
+decodePagesOfListing : Decode.Value -> Msg
+decodePagesOfListing value =
     case Decode.decodeValue pagesDecoder value of
         Ok pages ->
-            GotPagesOfPDFAsASetOfImages pages
+            GotPagesOfListing pages
 
         Err err ->
             Debug.log (Debug.toString err) NoOp
@@ -875,8 +901,8 @@ subscriptions _ =
     Sub.batch
         [ gotPageCountOfPDF decodeNumberOfPagesInListing
         , couldNotGetPageCountOfPDF CouldNotGetNumberOfPagesInListing
-        , gotPagesOfPDFAsASetOfImages decodePagesOfPDF
-        , couldNotGetPagesOfPDFAsASetOfImages CouldNotGetPagesOfPDFAsASetOfImages
+        , gotPagesOfListing decodePagesOfListing
+        , couldNotGetPagesOfListing CouldNotGetPagesOfListing
         ]
 
 
