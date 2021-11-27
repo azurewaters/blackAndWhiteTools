@@ -8,7 +8,6 @@ import Html.Events exposing (on, onClick, preventDefaultOn)
 import Html.Keyed as Keyed
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Encode as Encode
-import Svg.Attributes exposing (visibility)
 import Task
 
 
@@ -527,7 +526,7 @@ update msg model =
             )
 
         ClearAllButtonClicked ->
-            ( { model | listings = [], pages = [] }, Cmd.none )
+            ( { model | listings = [], pages = [], enableDownloadButton = False }, Cmd.none )
 
         DownloadDocumentButtonClicked ->
             let
