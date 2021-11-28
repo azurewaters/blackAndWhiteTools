@@ -77,13 +77,16 @@ type alias Listing =
     }
 
 
+type alias Listings =
+    List Listing
+
+
 type alias Model =
     { currentScreen : CurrentScreen
-    , listings : List Listing
+    , listings : Listings
     , pages : Pages
     , lastListingsId : Int --  lastListingsId used in calculating page numbers
     , listingBeingDragged : Maybe Listing
-    , enableDownloadButton : Bool
     }
 
 
@@ -98,7 +101,6 @@ init _ =
       , pages = []
       , lastListingsId = 0
       , listingBeingDragged = Nothing
-      , enableDownloadButton = False
       }
     , Cmd.none
     )
@@ -110,7 +112,7 @@ init _ =
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "Black and White Tools"
+    { title = "Pocketful of Sunshine - Tools"
     , body = [ viewRoot model ]
     }
 
@@ -118,7 +120,7 @@ view model =
 viewRoot : Model -> Html Msg
 viewRoot model =
     div
-        [ class "h-screen w-full bg-black grid grid-cols-1 content-start text-white space-y-8 p-8"
+        [ class "h-screen w-full grid grid-cols-1 content-start space-y-8 p-8"
         , style "grid-template-rows" "min-content 1fr min-content"
         ]
         [ pageHeader model.currentScreen
@@ -138,7 +140,7 @@ viewRoot model =
 pageHeader : CurrentScreen -> Html Msg
 pageHeader currentPage =
     div [ class "grid grid-flow-col w-full gap-8 w-max" ]
-        [ div [ class "font-bold text-green-500" ] [ text "Black and White Tools" ]
+        [ div [ class "font-bold text-green-500" ] [ text "Pocketful of Sunshine" ]
         , div [ class "grid grid-flow-col gap-4 w-max" ]
             [ navigationLink HomeLinkClicked (currentPage == Home) "Home"
             , navigationLink IndexMakerLinkClicked (currentPage == IndexMaker) "Index Maker"
@@ -171,39 +173,36 @@ home =
 indexMaker : Model -> Html Msg
 indexMaker model =
     let
-        disableTheDownloadButton : Bool
-        disableTheDownloadButton =
-            List.length model.listings == 0
+        disable : Bool
+        disable =
+            canDownloadButtonBeEnabled model.listings |> not
     in
     div
         [ class "min-h-full max-h-full grid grid-flow-row gap-4"
         , style "grid-template-rows" "min-content 1fr min-content"
         ]
         [ div
-            [ class "grid grid-flow-col content-start gap-4"
+            [ class "dropZoneHolder"
             , style "grid-template-columns" "1fr auto"
             ]
             [ dropZone
             , button
                 [ onClick ClearAllButtonClicked
-                , class "py-2 px-4 text-lg border-2 border-transparent hover:border-green-500 disabled:hover:border-gray-500 rounded-md disabled:bg-grey-500 text-gray-900 font-semibold"
-                , class "bg-green-600 hover:bg-green-500 disabled:bg-gray-400"
-                , disabled disableTheDownloadButton
+                , disabled disable
                 ]
                 [ text "Clear all" ]
             ]
         , Keyed.node "div"
-            [ class "h-full overflow-y-auto grid content-start sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full" ]
+            [ class "itemsHolder"
+            ]
             (List.map (\l -> ( l.id |> String.fromInt, listItem l )) model.listings)
         , div
-            [ class "grid grid-flow-col justify-center mt-4" ]
+            [ class "containerWithCenteredContent mt-4" ]
             [ button
                 [ onClick DownloadDocumentButtonClicked
-                , class "px-4 py-2 text-lg border-2 border-transparent hover:border-green-500 disabled:hover:border-gray-500 rounded-md disabled:bg-grey-500 text-gray-900 font-semibold"
-                , class "bg-green-600 hover:bg-green-500 disabled:bg-gray-400"
-                , model.enableDownloadButton |> not |> disabled
+                , disabled disable
                 ]
-                [ text "Download" ]
+                [ text "Download the Index" ]
             ]
         ]
 
@@ -213,9 +212,9 @@ dropZone =
     div
         [ onFilesDrop FilesDropped
         , onDragOver NoOp
-        , class "h-12 w-full bg-gray-900 rounded-md grid justify-center content-center text-sm text hover:bg-gray-800"
+        , class "dropZone"
         ]
-        [ div [ class "text-gray-500", disabled True ] [ text "Drop your documents here (*.pdf, *.jpg, *.png)" ]
+        [ div [ disabled True ] [ text "Drop your documents here (*.pdf, *.jpg, *.png)" ]
         ]
 
 
@@ -256,17 +255,15 @@ listItem listing =
         , onDragOver NoOp
         , onDrop (ListingDrop listing)
         , onDragEnd ListingDragEnd
-        , class "group grid text-sm p-4 gap-4 rounded-md border-2 border-transparent hover:border-green-500 max-w-md bg-gray-900 p-2"
-        , style "grid-template-columns" "minmax(10px, min-content) 1fr minmax(10px, min-content)"
+        , class "listItem"
         , draggable "true"
         ]
         [ listing.index |> String.fromInt |> text
         , div
-            [ class "max-h-full w-full grid gap-2"
-            , style "grid-template-rows" "1fr 10px"
+            [ class "listItemDetailsContainer"
             ]
-            [ div [ class "overflow-auto max-w-full max-h-6" ] [ listing.title |> text ]
-            , div [ class "text-xs text-gray-500" ]
+            [ div [ class "listItemTitle" ] [ listing.title |> text ]
+            , div [ class "listItemStatus" ]
                 [ text
                     (case listing.numberOfPages of
                         Counting ->
@@ -349,7 +346,7 @@ update msg model =
                         (maxIndex + 1)
                         (maxIndex + List.length admissibleFiles)
 
-                newListings : List Listing
+                newListings : Listings
                 newListings =
                     List.map3
                         (\file id index ->
@@ -385,15 +382,20 @@ update msg model =
 
         ListItemsDeleteButtonClicked id ->
             let
-                newListings : List Listing
-                newListings =
+                updatedListings : Listings
+                updatedListings =
                     List.filter (\l -> l.id == id |> not) model.listings
 
-                newPages : Pages
-                newPages =
+                updatedPages : Pages
+                updatedPages =
                     List.filter (\p -> p.listingId /= id) model.pages
             in
-            ( { model | listings = reIndexListings newListings, pages = newPages }, Cmd.none )
+            ( { model
+                | listings = reIndexListings updatedListings
+                , pages = updatedPages
+              }
+            , Cmd.none
+            )
 
         ListingDragStart listing ->
             ( { model | listingBeingDragged = Just listing }, Cmd.none )
@@ -410,7 +412,7 @@ update msg model =
                             --  It should never come here
                             listingDroppedOn
 
-                newListings : List Listing
+                newListings : Listings
                 newListings =
                     List.filter (\l -> l.id /= listingBeingDragged.id) model.listings
                         |> List.map
@@ -436,7 +438,7 @@ update msg model =
                 isAPDF =
                     File.mime listing.file == "application/pdf"
 
-                updatedListings : List Listing
+                updatedListings : Listings
                 updatedListings =
                     List.map
                         (\l ->
@@ -473,7 +475,7 @@ update msg model =
                     List.filter (\l -> l.id == numberOfPagesInListing.listingId) model.listings
                         |> List.head
 
-                updatedListings : List Listing
+                updatedListings : Listings
                 updatedListings =
                     List.map
                         (\l ->
@@ -497,16 +499,11 @@ update msg model =
                         Nothing ->
                             Cmd.none
             in
-            ( { model
-                | listings = updatedListings
-                , enableDownloadButton = listingsStillBeingProcessed updatedListings |> not
-              }
-            , newCommand
-            )
+            ( { model | listings = updatedListings }, newCommand )
 
         CouldNotGetNumberOfPagesInListing listingId ->
             let
-                updatedListings : List Listing
+                updatedListings : Listings
                 updatedListings =
                     List.map
                         (\l ->
@@ -518,15 +515,15 @@ update msg model =
                         )
                         model.listings
             in
+            ( { model | listings = updatedListings }, Cmd.none )
+
+        ClearAllButtonClicked ->
             ( { model
-                | listings = updatedListings
-                , enableDownloadButton = listingsStillBeingProcessed updatedListings |> not
+                | listings = []
+                , pages = []
               }
             , Cmd.none
             )
-
-        ClearAllButtonClicked ->
-            ( { model | listings = [], pages = [], enableDownloadButton = False }, Cmd.none )
 
         DownloadDocumentButtonClicked ->
             let
@@ -561,7 +558,7 @@ update msg model =
                         _ ->
                             -1
 
-                updatedListings : List Listing
+                updatedListings : Listings
                 updatedListings =
                     List.map
                         (\l ->
@@ -576,22 +573,17 @@ update msg model =
                 newPagesContents : Pages
                 newPagesContents =
                     List.append model.pages pages
-
-                enableDownloadButton : Bool
-                enableDownloadButton =
-                    listingsStillBeingProcessed updatedListings |> not
             in
             ( { model
                 | listings = updatedListings
                 , pages = newPagesContents
-                , enableDownloadButton = enableDownloadButton
               }
             , Cmd.none
             )
 
         CouldNotGetPagesOfListing listingId ->
             let
-                updatedListings : List Listing
+                updatedListings : Listings
                 updatedListings =
                     List.map
                         (\l ->
@@ -614,26 +606,26 @@ encodeListingForPagesContentsExtraction l =
         ]
 
 
-listingsStillBeingProcessed : List Listing -> Bool
-listingsStillBeingProcessed listings =
-    listingsPagesStillBeingCounted listings && listingsPagesStillBeingRendered listings
+canDownloadButtonBeEnabled : Listings -> Bool
+canDownloadButtonBeEnabled listings =
+    List.length listings > 0 && not (listingsPagesStillBeingCounted listings) && not (listingsPagesStillBeingRendered listings)
 
 
-listingsPagesStillBeingRendered : List Listing -> Bool
+listingsPagesStillBeingRendered : Listings -> Bool
 listingsPagesStillBeingRendered listings =
     listings
         |> List.map .pagesContentsRetrievalStatus
         |> List.member Processing
 
 
-listingsPagesStillBeingCounted : List Listing -> Bool
+listingsPagesStillBeingCounted : Listings -> Bool
 listingsPagesStillBeingCounted listings =
     listings
         |> List.map .numberOfPages
         |> List.member Counting
 
 
-makeTheInnerPages : List Listing -> Pages -> String
+makeTheInnerPages : Listings -> Pages -> String
 makeTheInnerPages listings pages =
     let
         listingsPages : List String
@@ -717,7 +709,7 @@ renderPage page pageNumber =
         |> String.replace "@pageContents" page.contents
 
 
-makeAnIndex : List Listing -> String
+makeAnIndex : Listings -> String
 makeAnIndex listings =
     let
         tableHeader : String
@@ -778,12 +770,12 @@ removeFileExtension filename =
         |> String.join "."
 
 
-reIndexListings : List Listing -> List Listing
+reIndexListings : Listings -> Listings
 reIndexListings listings =
     List.map2 (\l i -> { l | index = i }) listings (List.range 1 (List.length listings))
 
 
-calculatePageNumbers : Int -> List Listing -> List Listing
+calculatePageNumbers : Int -> Listings -> Listings
 calculatePageNumbers lastListingsEndingPageNumber remainingListings =
     case remainingListings of
         head :: tail ->

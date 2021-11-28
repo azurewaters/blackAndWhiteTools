@@ -1,12 +1,11 @@
 // @ts-check
+import 'virtual:windi.css'
 import './style.css'
 import { Elm } from './Main.elm'
 import * as pdfjsLib from 'pdfjs-dist'
 import { Listing, Page } from './Types'
 import { PDFPageProxy } from 'pdfjs-dist/types/src/display/api'
 import docxload from 'docxload'
-
-import { jsPDF } from 'jspdf'
 
 //  Initialise
 const app: any = Elm.Main.init({
@@ -19,7 +18,6 @@ app.ports.getPageCountOfPDF.subscribe(getPageCountOfPDF)
 app.ports.getPagesOfPDFAsASetOfImages.subscribe(getPagesOfPDFAsASetOfImages)
 app.ports.generateADocument.subscribe(generateADocument)
 app.ports.getTheImagesDimensions.subscribe(getTheImagesDimensions)
-app.ports.testPDF.subscribe(createTheIndex)
 
 async function getPageCountOfPDF(e: { listingId: number, url: string }): Promise<void> {
   //  Find the number of pages
@@ -107,21 +105,4 @@ async function getPagesOfPDFAsASetOfImages(listing: Listing): Promise<void> {
     //  An error occurred. Let Elm know.
     app.ports.couldNotGetPagesOfListing.send(listing.id)
   }
-}
-
-async function createTheIndex(listings: Array<Listing>): Promise<void> {
-
-  //  Make the header
-  //  Take each listing and create the row
-  let doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: [210, 297],  //  A4,
-  })
-
-  doc.table(0, 0
-    , [{ 'Serial': '1', 'Description': 'D1', 'Page numbers': 'P1' }]
-    , ['Serial', 'Description', 'Page numbers']
-    , { margins: 0 })
-  doc.save('test.pdf')
 }
