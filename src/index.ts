@@ -3,7 +3,7 @@ import 'virtual:windi.css'
 import './style.css'
 import { Elm } from './Main.elm'
 import * as pdfjsLib from 'pdfjs-dist'
-import { Listing, Page } from './Types'
+import { Listing, ListingAndItsPages, ListingAndItsPagesAndTheirImages, Page, PageAndItsPDFPageProxy, PageAndItsImage, ListingAndItsPagesAndTheirPDFProxies } from './Types'
 import { PDFPageProxy } from 'pdfjs-dist/types/src/display/api'
 import docxload from 'docxload'
 
@@ -14,95 +14,155 @@ const app: any = Elm.Main.init({
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.10.377/build/pdf.worker.js'
 
 //  Subscribe to ports
-app.ports.getPageCountOfPDF.subscribe(getPageCountOfPDF)
-app.ports.getPagesOfPDFAsASetOfImages.subscribe(getPagesOfPDFAsASetOfImages)
-app.ports.generateADocument.subscribe(generateADocument)
+app.ports.getThePageCountOfThePDF.subscribe(getThePageCountOfThePDF)
 app.ports.getTheImagesDimensions.subscribe(getTheImagesDimensions)
+app.ports.generateADocument.subscribe(generateADocument)
 
-async function getPageCountOfPDF(e: { listingId: number, url: string }): Promise<void> {
+async function getThePageCountOfThePDF(listing: Listing): Promise<void> {
   //  Find the number of pages
   try {
-    let document = await pdfjsLib.getDocument(e.url).promise
-    app.ports.gotPageCountOfPDF.send({ listingId: e.listingId, pageCount: document.numPages })
+    let document = await pdfjsLib.getDocument(await readFileAsDataURL(listing.file)).promise
+    app.ports.gotPageCountOfPDF.send({ listingId: listing.id, pageCount: document.numPages })
   } catch (error) {
     console.log('An error occurred when counting the number of pages in a PDF', error)
-    app.ports.couldNotGetPageCountOfPDF.send(e.listingId)
+    app.ports.couldNotGetPageCountOfPDF.send(listing.id)
   }
 }
 
-async function getTheImagesDimensions(page: Page): Promise<void> {
+async function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    let reader = new FileReader()
+    reader.addEventListener('loadend', (e): any => {
+      if (e && e.target && e.target.result) {
+        typeof e.target.result == 'string' ? resolve(e.target.result.toString()) : ''
+      } else {
+        reject('File couldn\'t be read.')
+      }
+    })
+    reader.readAsDataURL(file)
+  })
+}
+
+async function getTheImagesDimensions(listing: Listing): Promise<void> {
   //  Load the image up and get its dimensions
   let image = document.createElement('img')
-  image.setAttribute('src', page.contents || "")
+  image.setAttribute('src', await readFileAsDataURL(listing.file) || "")
   image.onload = (): void => {
     //  Update the received page with the new details and send it back
-    page.naturalHeight = image.naturalHeight
-    page.naturalWidth = image.naturalWidth
-    app.ports.gotPagesOfListing.send([page])
+    let page: Page = {
+      id: 0,
+      listingId: listing.id,
+      naturalHeight: image.naturalHeight,
+      naturalWidth: image.naturalWidth
+    }
+
+    app.ports.gotTheImagesDimensions.send(page)
   }
 }
 
-async function getThePageAsAnImage(page: PDFPageProxy): Promise<Page> {
-  //  Render a page and send it back as an image
-  let viewport = page.getViewport({ scale: 1 })
-  let canvas = document.createElement('canvas')
-  canvas.height = viewport.height
-  canvas.width = viewport.width
-  let context: any = canvas.getContext('2d')
-  let renderContext = { canvasContext: context, viewport: viewport }
-  await page.render(renderContext).promise
 
-  let result: Page = {
-    contents: canvas.toDataURL(),
-    naturalHeight: canvas.height,
-    naturalWidth: canvas.width
-  }
+async function generateADocument(e: { template: string, listings: Listing[], pages: Page[] }) {
+  // try {
+  //  This is where we take the string sent here, and replace all the placeholders with the appropriate content
+  console.log('Listings', e.listings)
+  console.log('Pages', e.pages)
+  let newTemplate: string = await generateTheseListingsPages(e)
 
+  //  Get the pages' contents and put it into he Word document
+  await docxload(newTemplate, { fileName: 'index.docx' })
+  // }
+  // catch (err) {
+  //   console.log('An error occurred while producing the document', err)
+  // }
+}
+
+async function generateTheseListingsPages(e: { template: string, listings: Listing[], pages: Page[] }): Promise<string> {
+  let result: string = e.template
+
+  let listingsAndTheirPages: ListingAndItsPages[] =
+    e.listings.map((l: Listing): ListingAndItsPages => {
+      return {
+        listing: l,
+        pages: getThisListingsPages(l.id, e.pages)
+      }
+    })
+
+  let listingsAndTheirPagesAndTheirImages: ListingAndItsPagesAndTheirImages[] =
+    await Promise.all(listingsAndTheirPages.map(async (listingAndItsPages: ListingAndItsPages): Promise<ListingAndItsPagesAndTheirImages> => {
+      let result: ListingAndItsPagesAndTheirImages = {
+        listing: listingAndItsPages.listing,
+        pagesAndTheirImages: (listingAndItsPages.listing.file.type == 'application/pdf') ? await getThisListingsPagesAndTheirImages(listingAndItsPages) : [{ page: listingAndItsPages.pages[0], imageAsDataURL: await readFileAsDataURL(listingAndItsPages.listing.file) }]
+      }
+
+      return result
+    }))
+
+  //  Replace placeholders with their corresponding content
+  listingsAndTheirPagesAndTheirImages.forEach((l: ListingAndItsPagesAndTheirImages) => {
+    console.log(l)
+    l.pagesAndTheirImages.forEach((p: PageAndItsImage): void => {
+      let searchString: string = `data-listingId="${p.page.listingId}" data-pageId="${p.page.id}"`
+      result = result.replace(searchString, `src="${p.imageAsDataURL}"`)
+    })
+  })
+
+  //  Done
   return result
 }
 
-async function generateADocument(template: string) {
-  console.log('Came to generateADocument')
-  //  This is where we take the string sent here, and generate a docx using docxLoad
-  try {
-    await docxload(template, { fileName: 'index.docx' })
-  }
-  catch (err) {
-    console.log('An error occurred while producing the document', err)
-  }
+async function getThisListingsPagesAndTheirImages(l: ListingAndItsPages): Promise<PageAndItsImage[]> {
+  //  There are two situations -- one is if the file is a PDF and one if it is not
+  let result: PageAndItsImage[] = []
+  // try {
+  let pdf = await pdfjsLib.getDocument(await readFileAsDataURL(l.listing.file)).promise
+  let pageNumbers: number[] = [...Array(pdf.numPages).keys()].map(x => x + 1)
+
+  // let pagesAndTheirPDFPageProxies: PageAndItsPDFPageProxy[] =
+  //   await Promise.all(pageNumbers.map(async (pageNumber: number) => {
+  //     return {
+  //       page: l.pages[pageNumber],
+  //       pdfPageProxy: await pdf.getPage(pageNumber)
+  //     }
+  //   }))
+
+  let pagesAndTheirImages: PageAndItsImage[] =
+    await Promise.all(pageNumbers.map(async (pageNumber): Promise<PageAndItsImage> => {
+      return {
+        page: l.pages[pageNumber - 1],
+        imageAsDataURL: await getAPageOfThePDFAsAnImage(await pdf.getPage(pageNumber))
+      }
+    }))
+
+  result = pagesAndTheirImages
+  // } catch (error) {
+  //   console.log('An error occurred when getting a listings pages and their images', error)
+  // }
+
+  //  Done
+  return result
 }
 
-async function getPagesOfPDFAsASetOfImages(listing: Listing): Promise<void> {
-  //  Now, check to see if the listing's file is a PDF
-  //  If it is, load up the PDF document
-  //  Get the list of pages in the PDF
-  //  Send that off to the function that will render the page as an image and return its dataURL
-  if (listing.fileContents) {
-    let result: Array<Page> = []
-    try {
-      let pdf = await pdfjsLib.getDocument(listing.fileContents).promise
-      let pageNumbers: Array<number> = [...Array(pdf.numPages).keys()].map(x => x + 1)
-      let pdfPages: Array<PDFPageProxy> = await Promise.all(pageNumbers.map((pageNumber) => { return pdf.getPage(pageNumber) }))
-      let pdfPagesAsPages: Array<Page> = await Promise.all(pdfPages.map((p: PDFPageProxy) => { return getThePageAsAnImage(p) }))
+function getThisListingsPages(listingId: number, pages: Page[]): Page[] {
+  return pages.filter((p) => { return p.listingId == listingId })
+}
 
-      //  Insert the data that the Page objects don't already have
-      result =
-        pdfPagesAsPages.map((p: Page, i: number) => {
-          p.listingId = listing.id
-          p.id = i  //  Zero based id
+async function getAPageOfThePDFAsAnImage(pageProxy: PDFPageProxy): Promise<string> {
+  //  Render a page and send it back as an image
+  let viewport = pageProxy.getViewport({ scale: 3 })
+  let canvas = document.createElement('canvas')
+  canvas.height = viewport.height
+  canvas.width = viewport.width
+  let context: any = canvas.getContext('2d', { alpha: false })
+  let renderContext = { canvasContext: context, viewport: viewport }
+  await pageProxy.render(renderContext).promise
 
-          return p
-        })
-
-      //  Done. Let Elm know.
-      app.ports.gotPagesOfListing.send(result)
-    } catch (error) {
-      //  An error occurred. Let Elm know.
-      console.log('Error while extracting the pages as images', error)
-      app.ports.couldNotGetPagesOfListing.send(listing.id)
-    }
-  } else {
-    //  An error occurred. Let Elm know.
-    app.ports.couldNotGetPagesOfListing.send(listing.id)
-  }
+  return canvas.toDataURL()
+  // // return canvas.toDataURL() //  Defaults to PNG
+  // return new Promise((resolve) => {
+  //   let worker: Worker = new Worker('pdfRenderer.js')
+  //   worker.postMessage(JSON.stringify(pageProxy))
+  //   worker.onmessage = (e) => {
+  //     resolve(e.data)
+  //   }
+  // })
 }

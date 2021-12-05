@@ -6,9 +6,8 @@ import Html exposing (Attribute, Html, a, button, div, text)
 import Html.Attributes exposing (class, classList, disabled, draggable, id, style)
 import Html.Events exposing (on, onClick, preventDefaultOn)
 import Html.Keyed as Keyed
-import Json.Decode as Decode exposing (Decoder, Error(..))
+import Json.Decode as Decode exposing (Decoder, Error(..), value)
 import Json.Encode as Encode
-import Task
 
 
 
@@ -36,8 +35,7 @@ type PageCount
 
 type alias Page =
     { listingId : Id
-    , id : Id
-    , contents : DataURL --  The page's image as a dataURL
+    , id : Id --  Zero based
     , naturalHeight : Int
     , naturalWidth : Int
     }
@@ -47,33 +45,20 @@ type alias Pages =
     List Page
 
 
-type PagesContentsRetrievalStatus
-    = Standby
-    | Processing
-    | Retrieved
-    | Error
-
-
 type alias NumberOfPagesInListing =
     { listingId : Int
     , pageCount : Int
     }
 
 
-type alias DataURL =
-    String
-
-
 type alias Listing =
     { id : Id
-    , file : File
-    , fileContents : DataURL --  The file's contents as a dataURL
+    , file : Encode.Value
     , index : Index
     , title : String
     , numberOfPages : PageCount
     , startingPageNumber : Int
     , endingPageNumber : Int
-    , pagesContentsRetrievalStatus : PagesContentsRetrievalStatus
     }
 
 
@@ -139,9 +124,9 @@ viewRoot model =
 
 pageHeader : CurrentScreen -> Html Msg
 pageHeader currentPage =
-    div [ class "grid grid-flow-col w-full gap-8 w-max" ]
-        [ div [ class "font-bold text-green-500" ] [ text "Pocketful of Sunshine" ]
-        , div [ class "grid grid-flow-col gap-4 w-max" ]
+    div [ class "grid grid-flow-col content-end w-full gap-8 w-max" ]
+        [ div [ class "font-bold text-xl text-black" ] [ text "Pocketful of Sunshine" ]
+        , div [ class "grid grid-flow-col gap-4 w-max content-end" ]
             [ navigationLink HomeLinkClicked (currentPage == Home) "Home"
             , navigationLink IndexMakerLinkClicked (currentPage == IndexMaker) "Index Maker"
             ]
@@ -153,7 +138,7 @@ navigationLink msg show linkText =
     a
         [ onClick msg
         , class "cursor-pointer"
-        , classList [ ( "font-semibold", show ), ( "text-green-500", show ) ]
+        , classList [ ( "font-semibold", show ), ( "text-black", show ) ]
         ]
         [ text linkText ]
 
@@ -188,12 +173,14 @@ indexMaker model =
             [ dropZone
             , button
                 [ onClick ClearAllButtonClicked
-                , disabled disable
+                , disabled (List.length model.listings == 0)
                 ]
                 [ text "Clear all" ]
             ]
         , Keyed.node "div"
-            [ class "itemsHolder"
+            [ class "itemsHolder border-2 border-black"
+            , onFilesDrop FilesDropped
+            , onDragOver NoOp
             ]
             (List.map (\l -> ( l.id |> String.fromInt, listItem l )) model.listings)
         , div
@@ -233,14 +220,14 @@ onDrop msg =
     preventDefaultOn "drop" (Decode.succeed ( msg, True ))
 
 
-onFilesDrop : (List File -> Msg) -> Attribute Msg
+onFilesDrop : (List Encode.Value -> Msg) -> Attribute Msg
 onFilesDrop msg =
     preventDefaultOn "drop" (Decode.map2 Tuple.pair (Decode.map msg filesDecoder) (Decode.succeed True))
 
 
-filesDecoder : Decoder (List File)
+filesDecoder : Decoder (List Encode.Value)
 filesDecoder =
-    Decode.at [ "dataTransfer", "files" ] (Decode.list File.decoder)
+    Decode.at [ "dataTransfer", "files" ] (Decode.list Decode.value)
 
 
 onDragEnd : Msg -> Attribute Msg
@@ -296,18 +283,16 @@ type Msg
     = NoOp
     | HomeLinkClicked
     | IndexMakerLinkClicked
-    | FilesDropped (List File)
+    | FilesDropped (List Encode.Value)
     | ListItemsDeleteButtonClicked Id
     | ListingDragStart Listing
     | ListingDrop Listing
     | ListingDragEnd
-    | ConvertedFileToURL Listing String
     | GotNumberOfPagesInListing NumberOfPagesInListing
     | CouldNotGetNumberOfPagesInListing Id
     | ClearAllButtonClicked
     | DownloadDocumentButtonClicked
-    | GotPagesOfListing Pages
-    | CouldNotGetPagesOfListing Id
+    | GotTheImagesDimensions Page
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -324,11 +309,18 @@ update msg model =
 
         FilesDropped files ->
             let
-                admissibleFiles : List File
+                admissibleFiles : List Encode.Value
                 admissibleFiles =
-                    List.filter
-                        (\f -> List.member (File.mime f) [ "application/pdf", "image/jpeg", "image/png", "image/tiff" ])
-                        files
+                    files
+                        |> List.filter
+                            (\file ->
+                                case decodeFile file of
+                                    Just f ->
+                                        List.member (File.mime f) [ "image/png", "image/jpeg", "application/pdf" ]
+
+                                    Nothing ->
+                                        False
+                            )
 
                 maxIndex : Int
                 maxIndex =
@@ -349,33 +341,76 @@ update msg model =
                 newListings : Listings
                 newListings =
                     List.map3
-                        (\file id index ->
+                        (\value id index ->
+                            let
+                                ( t, nOP ) =
+                                    case decodeFile value of
+                                        Just f ->
+                                            ( f |> File.name |> removeFileExtension
+                                            , case File.mime f of
+                                                "application/pdf" ->
+                                                    Counting
+
+                                                _ ->
+                                                    Counted 1
+                                            )
+
+                                        Nothing ->
+                                            ( "", Unvailable )
+                            in
                             { id = id
-                            , file = file
-                            , fileContents = ""
+                            , file = value
                             , index = index
-                            , title = file |> File.name |> removeFileExtension
-                            , numberOfPages = Counting
+                            , title = t
+                            , numberOfPages = nOP
                             , startingPageNumber = 0
                             , endingPageNumber = 0
-                            , pagesContentsRetrievalStatus = Standby
                             }
                         )
                         admissibleFiles
                         newIds
                         newIndexes
 
+                newPages : Pages
+                newPages =
+                    List.filterMap
+                        (\l ->
+                            Maybe.andThen
+                                (\f ->
+                                    if File.mime f /= "application/pdf" then
+                                        Page l.id 0 0 0 |> Just
+
+                                    else
+                                        Nothing
+                                )
+                                (decodeFile l.file)
+                        )
+                        newListings
+
                 newCommands : List (Cmd Msg)
                 newCommands =
                     List.map
                         (\l ->
-                            Task.perform (ConvertedFileToURL l) (File.toUrl l.file)
+                            let
+                                _ =
+                                    Debug.log (Debug.toString l.id) "Hey"
+                            in
+                            case l.numberOfPages of
+                                Counted _ ->
+                                    encodeListingIdAndFile l.id l.file |> getTheImagesDimensions
+
+                                Counting ->
+                                    encodeListingIdAndFile l.id l.file |> getThePageCountOfThePDF
+
+                                _ ->
+                                    Cmd.none
                         )
                         newListings
             in
             ( { model
                 | listings = List.append model.listings newListings
                 , lastListingsId = model.lastListingsId + List.length newListings
+                , pages = model.pages ++ newPages
               }
             , Cmd.batch newCommands
             )
@@ -432,49 +467,8 @@ update msg model =
         ListingDragEnd ->
             ( { model | listingBeingDragged = Nothing }, Cmd.none )
 
-        ConvertedFileToURL listing url ->
-            let
-                isAPDF : Bool
-                isAPDF =
-                    File.mime listing.file == "application/pdf"
-
-                updatedListings : Listings
-                updatedListings =
-                    List.map
-                        (\l ->
-                            if l.id == listing.id then
-                                { l
-                                    | fileContents = url
-                                    , numberOfPages =
-                                        if isAPDF then
-                                            Counting
-
-                                        else
-                                            Counted 1
-                                }
-
-                            else
-                                l
-                        )
-                        model.listings
-
-                newCommand : Cmd msg
-                newCommand =
-                    if isAPDF then
-                        getPageCountOfPDF (encodeDetailsForPageCount listing.id url)
-
-                    else
-                        getTheImagesDimensions (Page listing.id 0 url 0 0)
-            in
-            ( { model | listings = updatedListings }, newCommand )
-
         GotNumberOfPagesInListing numberOfPagesInListing ->
             let
-                theListing : Maybe Listing
-                theListing =
-                    List.filter (\l -> l.id == numberOfPagesInListing.listingId) model.listings
-                        |> List.head
-
                 updatedListings : Listings
                 updatedListings =
                     List.map
@@ -482,7 +476,6 @@ update msg model =
                             if l.id == numberOfPagesInListing.listingId then
                                 { l
                                     | numberOfPages = Counted numberOfPagesInListing.pageCount
-                                    , pagesContentsRetrievalStatus = Processing
                                 }
 
                             else
@@ -490,16 +483,26 @@ update msg model =
                         )
                         model.listings
 
-                newCommand : Cmd Msg
-                newCommand =
-                    case theListing of
-                        Just l ->
-                            encodeListingForPagesContentsExtraction l |> getPagesOfPDFAsASetOfImages
+                --  Since it's a bunch of PDF pages, they'll occupy the maximum space allowed
+                --  And, we know the number of pages, so we'll just create the pages
+                newPages : Pages
+                newPages =
+                    updatedListings
+                        |> List.filter (\l -> l.id == numberOfPagesInListing.listingId)
+                        |> List.head
+                        |> (\maybeListing ->
+                                case maybeListing of
+                                    Just l ->
+                                        createPagesForPDF l
 
-                        Nothing ->
-                            Cmd.none
+                                    Nothing ->
+                                        Debug.log "No pages" []
+                           )
+
+                _ =
+                    Debug.log (Debug.toString newPages) "New pages"
             in
-            ( { model | listings = updatedListings }, newCommand )
+            ( { model | listings = updatedListings, pages = model.pages ++ newPages }, Cmd.none )
 
         CouldNotGetNumberOfPagesInListing listingId ->
             let
@@ -537,85 +540,110 @@ update msg model =
                     Step 2: Make the individual pages
                         Wrap each image in each listing with a page tag
                 --}
-                index : String
-                index =
+                indexPages : String
+                indexPages =
                     makeAnIndex model.listings
 
-                pages : String
-                pages =
+                innerPages : String
+                innerPages =
                     makeTheInnerPages model.listings model.pages
-            in
-            ( model, Encode.string (index ++ pages) |> generateADocument )
 
-        GotPagesOfListing pages ->
+                dataToSendOut : Encode.Value
+                dataToSendOut =
+                    Encode.object
+                        [ ( "template", indexPages ++ innerPages |> Encode.string )
+                        , ( "listings", encodeListings model.listings )
+                        , ( "pages", encodePages model.pages )
+                        ]
+            in
+            ( model, generateADocument dataToSendOut )
+
+        GotTheImagesDimensions page ->
             let
-                listingId : Int
-                listingId =
-                    case pages of
-                        head :: _ ->
-                            head.listingId
+                updatedPages : Pages
+                updatedPages =
+                    model.pages
+                        |> List.map
+                            (\p ->
+                                if p.listingId == page.listingId then
+                                    { p | naturalHeight = page.naturalHeight, naturalWidth = page.naturalWidth }
 
-                        _ ->
-                            -1
+                                else
+                                    p
+                            )
 
-                updatedListings : Listings
-                updatedListings =
-                    List.map
-                        (\l ->
-                            if l.id == listingId then
-                                { l | pagesContentsRetrievalStatus = Retrieved }
-
-                            else
-                                l
-                        )
-                        model.listings
-
-                newPagesContents : Pages
-                newPagesContents =
-                    List.append model.pages pages
+                _ =
+                    Debug.log (Debug.toString updatedPages) "Page"
             in
-            ( { model
-                | listings = updatedListings
-                , pages = newPagesContents
-              }
-            , Cmd.none
-            )
-
-        CouldNotGetPagesOfListing listingId ->
-            let
-                updatedListings : Listings
-                updatedListings =
-                    List.map
-                        (\l ->
-                            if l.id == listingId then
-                                { l | pagesContentsRetrievalStatus = Error }
-
-                            else
-                                l
-                        )
-                        model.listings
-            in
-            ( { model | listings = updatedListings }, Cmd.none )
+            ( { model | pages = updatedPages }, Cmd.none )
 
 
-encodeListingForPagesContentsExtraction : Listing -> Encode.Value
-encodeListingForPagesContentsExtraction l =
+createPagesForPDF : Listing -> Pages
+createPagesForPDF listing =
+    case listing.numberOfPages of
+        Counted n ->
+            List.range 0 (n - 1)
+                |> List.map (\pageId -> Page listing.id pageId (29.7 * 28.3465 |> Basics.round) (21 * 28.3456 |> Basics.round))
+
+        _ ->
+            []
+
+
+encodePages : Pages -> Encode.Value
+encodePages pages =
+    Encode.list pageEncoder pages
+
+
+pageEncoder : Page -> Encode.Value
+pageEncoder page =
     Encode.object
-        [ ( "id", Encode.int l.id )
-        , ( "fileContents", Encode.string l.fileContents )
+        [ ( "listingId", Encode.int page.listingId )
+        , ( "id", Encode.int page.id )
+        , ( "naturalHeight", Encode.int page.naturalHeight )
+        , ( "naturalWidth", Encode.int page.naturalWidth )
         ]
+
+
+encodeListings : Listings -> Encode.Value
+encodeListings listings =
+    Encode.list encodeListing listings
+
+
+encodeListing : Listing -> Encode.Value
+encodeListing listing =
+    Encode.object
+        [ ( "id", Encode.int listing.id )
+        , ( "file", listing.file )
+        , ( "index", Encode.int listing.index )
+        , ( "title", Encode.string listing.title )
+        , ( "numberOfPages"
+          , (case listing.numberOfPages of
+                Counted x ->
+                    x
+
+                _ ->
+                    -1
+            )
+                |> Encode.int
+          )
+        , ( "startingPageNumber", Encode.int listing.startingPageNumber )
+        , ( "endingPageNumber", Encode.int listing.endingPageNumber )
+        ]
+
+
+decodeFile : Encode.Value -> Maybe File
+decodeFile value =
+    case Decode.decodeValue File.decoder value of
+        Ok f ->
+            Just f
+
+        Err _ ->
+            Nothing
 
 
 canDownloadButtonBeEnabled : Listings -> Bool
 canDownloadButtonBeEnabled listings =
-    List.length listings > 0 && not (listingsPagesStillBeingCounted listings) && not (listingsPagesStillBeingRendered listings)
-
-
-listingsPagesStillBeingRendered : Listings -> Bool
-listingsPagesStillBeingRendered listings =
-    listings
-        |> List.map .pagesContentsRetrievalStatus
-        |> List.member Processing
+    List.length listings > 0 && not (listingsPagesStillBeingCounted listings)
 
 
 listingsPagesStillBeingCounted : Listings -> Bool
@@ -700,13 +728,14 @@ renderPage page pageNumber =
     in
     """
     <page header="alignment: right; format:@pageNumber">
-        <p><img src="@pageContents" height="@height" width="@width"/></p>
+        <p><img data-listingId="@listingId" data-pageId="@pageId" height="@height" width="@width"/></p>
     </page>
     """
+        |> String.replace "@listingId" (String.fromInt page.listingId)
+        |> String.replace "@pageId" (String.fromInt page.id)
         |> String.replace "@pageNumber" (String.fromInt pageNumber)
         |> String.replace "@height" (String.fromFloat finalHeight)
         |> String.replace "@width" (String.fromFloat finalWidth)
-        |> String.replace "@pageContents" page.contents
 
 
 makeAnIndex : Listings -> String
@@ -795,27 +824,21 @@ calculatePageNumbers lastListingsEndingPageNumber remainingListings =
             []
 
 
-encodeDetailsForPageCount : Id -> String -> Encode.Value
-encodeDetailsForPageCount id urlEncodedFile =
+encodeListingIdAndFile : Id -> Encode.Value -> Encode.Value
+encodeListingIdAndFile id file =
     Encode.object
-        [ ( "listingId", Encode.int id )
-        , ( "url", Encode.string urlEncodedFile )
+        [ ( "id", Encode.int id )
+        , ( "file", file )
         ]
 
 
-port getPageCountOfPDF : Encode.Value -> Cmd msg
+port getThePageCountOfThePDF : Encode.Value -> Cmd msg
 
 
-port getTheImagesDimensions : Page -> Cmd msg
-
-
-port getPagesOfPDFAsASetOfImages : Encode.Value -> Cmd msg
+port getTheImagesDimensions : Encode.Value -> Cmd msg
 
 
 port generateADocument : Encode.Value -> Cmd msg
-
-
-port testPDF : Encode.Value -> Cmd msg
 
 
 
@@ -828,13 +851,7 @@ port gotPageCountOfPDF : (Encode.Value -> msg) -> Sub msg
 port couldNotGetPageCountOfPDF : (Int -> msg) -> Sub msg
 
 
-port gotImageDimensions : (Page -> msg) -> Sub msg
-
-
-port gotPagesOfListing : (Encode.Value -> msg) -> Sub msg
-
-
-port couldNotGetPagesOfListing : (Int -> msg) -> Sub msg
+port gotTheImagesDimensions : (Encode.Value -> msg) -> Sub msg
 
 
 numberOfPagesInListingDecoder : Decoder NumberOfPagesInListing
@@ -852,21 +869,6 @@ pageCountDecoder =
     Decode.field "pageCount" Decode.int
 
 
-pageDecoder : Decoder Page
-pageDecoder =
-    Decode.map5 Page
-        (Decode.field "listingId" Decode.int)
-        (Decode.field "id" Decode.int)
-        (Decode.field "contents" Decode.string)
-        (Decode.field "naturalHeight" Decode.int)
-        (Decode.field "naturalWidth" Decode.int)
-
-
-pagesDecoder : Decoder Pages
-pagesDecoder =
-    Decode.list pageDecoder
-
-
 decodeNumberOfPagesInListing : Decode.Value -> Msg
 decodeNumberOfPagesInListing value =
     case Decode.decodeValue numberOfPagesInListingDecoder value of
@@ -877,14 +879,23 @@ decodeNumberOfPagesInListing value =
             Debug.log (Debug.toString e) NoOp
 
 
-decodePagesOfListing : Decode.Value -> Msg
-decodePagesOfListing value =
-    case Decode.decodeValue pagesDecoder value of
-        Ok pages ->
-            GotPagesOfListing pages
+pageDecoder : Decoder Page
+pageDecoder =
+    Decode.map4 Page
+        listingIdDecoder
+        (Decode.field "id" Decode.int)
+        (Decode.field "naturalHeight" Decode.int)
+        (Decode.field "naturalWidth" Decode.int)
+
+
+decodeTheImagesDimensions : Encode.Value -> Msg
+decodeTheImagesDimensions value =
+    case Decode.decodeValue pageDecoder value of
+        Ok page ->
+            GotTheImagesDimensions page
 
         Err err ->
-            Debug.log (Debug.toString err) NoOp
+            Debug.log (Debug.toString err ++ Debug.toString value) NoOp
 
 
 subscriptions : Model -> Sub Msg
@@ -892,8 +903,7 @@ subscriptions _ =
     Sub.batch
         [ gotPageCountOfPDF decodeNumberOfPagesInListing
         , couldNotGetPageCountOfPDF CouldNotGetNumberOfPagesInListing
-        , gotPagesOfListing decodePagesOfListing
-        , couldNotGetPagesOfListing CouldNotGetPagesOfListing
+        , gotTheImagesDimensions decodeTheImagesDimensions
         ]
 
 
