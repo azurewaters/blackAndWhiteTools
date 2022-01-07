@@ -235,15 +235,14 @@ onDragEnd msg =
 listItem : Listing -> Html Msg
 listItem listing =
     div
-        [ onDragStart (ListingDragStart listing)
+        [ class "listItem"
+        , onDragStart (ListingDragStart listing)
         , onDragOver NoOp
         , onDrop (ListingDrop listing)
         , onDragEnd ListingDragEnd
-        , class "listItem"
         , draggable "true"
         ]
-        [ listing.index |> String.fromInt |> text
-        , div
+        [ div
             [ class "listItemDetailsContainer"
             ]
             [ div [ class "listItemTitle" ] [ listing.title |> text ]
@@ -264,10 +263,11 @@ listItem listing =
                     )
                 ]
             ]
-        , button
-            [ onClick (ListItemsDeleteButtonClicked listing.id)
+        , div
+            [ class "listItemCancelButton"
+            , onClick (ListItemsDeleteButtonClicked listing.id)
             ]
-            [ text "+" ]
+            [ text "x" ]
         ]
 
 

@@ -24,44 +24,37 @@ button {
   @apply grid grid-flow-col justify-center;
 }
 
-.dropZone {
-  @apply h-12 w-full grid justify-center content-center
-    border-2 border-gray-300 rounded-md
-    bg-gray-200
-    text-sm text-gray-500
-    hover:(bg-gray-100);
-}
-
-.dropZoneHolder {
-  @apply grid grid-flow-col content-start gap-4;
-}
-
 .itemsHolder {
-  @apply h-full min-h-12 rounded-md overflow-y-auto w-full grid content-start gap-4;
+  @apply min-h-full overflow-y-auto w-full grid gap-2;
 }
 
 .itemsHolderEmpty {
-  @apply grid-cols-1;
+  @apply content-center;
 }
 
 .itemsHolderNonEmpty {
-  @apply 
-    sm:grid-cols-1
-    md:grid-cols-2
-    lg:grid-cols-4;
+  @apply
+    content-start
+    sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4
+  ;
 }
 
 .listItem {
-  @apply group max-w-md p-4 grid gap-4
-    border-2 border-gray-300 rounded-md
-    bg-gray-200
+  @apply
+    group
+    max-w-md p-4
+    border-1 border-gray-300 rounded-md
+    bg-gray-100
+    grid gap-4
     text-sm
-    hover:(bg-gray-100);
-    grid-template-columns: minmax(10px, min-content) 1fr minmax(10px, min-content);
+    hover:(bg-transparent);
+    grid-template-columns: 1fr minmax(10px, min-content);
 }
 
 .listItemDetailsContainer {
-  @apply max-h-full w-full grid gap-2;
+  @apply max-h-full w-full grid gap-2
+  group-hover: text-red-500
+  ;
   grid-template-rows: 1fr 10px;
 }
 
@@ -71,4 +64,8 @@ button {
 
 .listItemStatus {
   @apply text-xs text-gray-500;
+}
+
+.listItemCancelButton {
+  @apply cursor-pointer text-gray-500;
 }

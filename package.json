@@ -21,10 +21,8 @@
     "windicss": "^3.2.1"
   },
   "dependencies": {
-    "docxload": "^1.0.6",
     "file-saver": "^2.0.5",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^2.10.377",
     "pdfmake": "^0.2.4"
   }
 }
