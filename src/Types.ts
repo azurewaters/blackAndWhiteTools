@@ -1,6 +1,6 @@
 // @ts-check
 
-import { PDFPageProxy } from "pdfjs-dist/types/src/display/api"
+import { PDFDocument } from "pdf-lib"
 
 interface Listing {
   id: number,
@@ -12,21 +12,6 @@ interface Listing {
   endingPageNumber: number
 }
 
-interface ListingAndItsPages {
-  listing: Listing,
-  pages: Page[]
-}
-
-interface ListingAndItsPagesAndTheirPDFProxies {
-  listing: Listing,
-  pagesAndTheirPDFProxies: PDFPageProxy[]
-}
-
-interface ListingAndItsPagesAndTheirImages {
-  listing: Listing,
-  pagesAndTheirImages: PageAndItsImage[]
-}
-
 interface Page {
   listingId?: number,
   id?: number,  //  Zero based id 
@@ -34,15 +19,9 @@ interface Page {
   naturalWidth?: number
 }
 
-interface PageAndItsPDFPageProxy {
-  page: Page,
-  pdfPageProxy: PDFPageProxy
+interface ListingDocument {
+  listingId: number,
+  document: PDFDocument
 }
 
-
-interface PageAndItsImage {
-  page: Page,
-  imageAsDataURL: string //  Page's contents as a DataURL
-}
-
-export { Listing, ListingAndItsPages, ListingAndItsPagesAndTheirPDFProxies, ListingAndItsPagesAndTheirImages, Page, PageAndItsPDFPageProxy, PageAndItsImage }
+export { Listing, Page, ListingDocument }

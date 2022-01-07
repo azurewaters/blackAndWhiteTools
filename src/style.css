@@ -37,7 +37,15 @@ button {
 }
 
 .itemsHolder {
-  @apply h-full overflow-y-auto w-full grid content-start gap-4
+  @apply h-full min-h-12 rounded-md overflow-y-auto w-full grid content-start gap-4;
+}
+
+.itemsHolderEmpty {
+  @apply grid-cols-1;
+}
+
+.itemsHolderNonEmpty {
+  @apply 
     sm:grid-cols-1
     md:grid-cols-2
     lg:grid-cols-4;
@@ -49,7 +57,7 @@ button {
     bg-gray-200
     text-sm
     hover:(bg-gray-100);
-  grid-template-columns: minmax(10px, min-content) 1fr minmax(10px, min-content);
+    grid-template-columns: minmax(10px, min-content) 1fr minmax(10px, min-content);
 }
 
 .listItemDetailsContainer {

@@ -164,44 +164,41 @@ indexMaker model =
     in
     div
         [ class "min-h-full max-h-full grid grid-flow-row gap-4"
-        , style "grid-template-rows" "min-content 1fr min-content"
+        , style "grid-template-rows" "1fr min-content"
         ]
-        [ div
-            [ class "dropZoneHolder"
-            , style "grid-template-columns" "1fr auto"
+        [ Keyed.node "div"
+            [ classList
+                [ ( "itemsHolder", True )
+                , ( "itemsHolderEmpty", List.length model.listings == 0 )
+                , ( "itemsHolderNonEmpty", List.length model.listings > 0 )
+                ]
+            , onFilesDrop FilesDropped
+            , onDragOver NoOp
             ]
-            [ dropZone
-            , button
+            (if List.length model.listings == 0 then
+                [ ( "empty"
+                  , div
+                        [ class "text-gray-400 mx-auto" ]
+                        [ text "Drag your PDFs, JPEGs and PNGs here." ]
+                  )
+                ]
+
+             else
+                List.map (\l -> ( l.id |> String.fromInt, listItem l )) model.listings
+            )
+        , div
+            [ class "grid grid-flow-col auto-cols-max justify-between gap-x-4 mt-4" ]
+            [ button
                 [ onClick ClearAllButtonClicked
                 , disabled (List.length model.listings == 0)
                 ]
                 [ text "Clear all" ]
-            ]
-        , Keyed.node "div"
-            [ class "itemsHolder border-2 border-black"
-            , onFilesDrop FilesDropped
-            , onDragOver NoOp
-            ]
-            (List.map (\l -> ( l.id |> String.fromInt, listItem l )) model.listings)
-        , div
-            [ class "containerWithCenteredContent mt-4" ]
-            [ button
+            , button
                 [ onClick DownloadDocumentButtonClicked
                 , disabled disable
                 ]
-                [ text "Download the Index" ]
+                [ text "Download" ]
             ]
-        ]
-
-
-dropZone : Html Msg
-dropZone =
-    div
-        [ onFilesDrop FilesDropped
-        , onDragOver NoOp
-        , class "dropZone"
-        ]
-        [ div [ disabled True ] [ text "Drop your documents here (*.pdf, *.jpg, *.png)" ]
         ]
 
 
@@ -269,7 +266,6 @@ listItem listing =
             ]
         , button
             [ onClick (ListItemsDeleteButtonClicked listing.id)
-            , class "items-center hidden group-hover:grid transform rotate-45"
             ]
             [ text "+" ]
         ]
@@ -292,7 +288,6 @@ type Msg
     | CouldNotGetNumberOfPagesInListing Id
     | ClearAllButtonClicked
     | DownloadDocumentButtonClicked
-    | GotTheImagesDimensions Page
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -391,14 +386,7 @@ update msg model =
                 newCommands =
                     List.map
                         (\l ->
-                            let
-                                _ =
-                                    Debug.log (Debug.toString l.id) "Hey"
-                            in
                             case l.numberOfPages of
-                                Counted _ ->
-                                    encodeListingIdAndFile l.id l.file |> getTheImagesDimensions
-
                                 Counting ->
                                     encodeListingIdAndFile l.id l.file |> getThePageCountOfThePDF
 
@@ -498,9 +486,6 @@ update msg model =
                                     Nothing ->
                                         Debug.log "No pages" []
                            )
-
-                _ =
-                    Debug.log (Debug.toString newPages) "New pages"
             in
             ( { model | listings = updatedListings, pages = model.pages ++ newPages }, Cmd.none )
 
@@ -557,25 +542,6 @@ update msg model =
                         ]
             in
             ( model, generateADocument dataToSendOut )
-
-        GotTheImagesDimensions page ->
-            let
-                updatedPages : Pages
-                updatedPages =
-                    model.pages
-                        |> List.map
-                            (\p ->
-                                if p.listingId == page.listingId then
-                                    { p | naturalHeight = page.naturalHeight, naturalWidth = page.naturalWidth }
-
-                                else
-                                    p
-                            )
-
-                _ =
-                    Debug.log (Debug.toString updatedPages) "Page"
-            in
-            ( { model | pages = updatedPages }, Cmd.none )
 
 
 createPagesForPDF : Listing -> Pages
@@ -835,9 +801,6 @@ encodeListingIdAndFile id file =
 port getThePageCountOfThePDF : Encode.Value -> Cmd msg
 
 
-port getTheImagesDimensions : Encode.Value -> Cmd msg
-
-
 port generateADocument : Encode.Value -> Cmd msg
 
 
@@ -849,9 +812,6 @@ port gotPageCountOfPDF : (Encode.Value -> msg) -> Sub msg
 
 
 port couldNotGetPageCountOfPDF : (Int -> msg) -> Sub msg
-
-
-port gotTheImagesDimensions : (Encode.Value -> msg) -> Sub msg
 
 
 numberOfPagesInListingDecoder : Decoder NumberOfPagesInListing
@@ -879,31 +839,11 @@ decodeNumberOfPagesInListing value =
             Debug.log (Debug.toString e) NoOp
 
 
-pageDecoder : Decoder Page
-pageDecoder =
-    Decode.map4 Page
-        listingIdDecoder
-        (Decode.field "id" Decode.int)
-        (Decode.field "naturalHeight" Decode.int)
-        (Decode.field "naturalWidth" Decode.int)
-
-
-decodeTheImagesDimensions : Encode.Value -> Msg
-decodeTheImagesDimensions value =
-    case Decode.decodeValue pageDecoder value of
-        Ok page ->
-            GotTheImagesDimensions page
-
-        Err err ->
-            Debug.log (Debug.toString err ++ Debug.toString value) NoOp
-
-
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ gotPageCountOfPDF decodeNumberOfPagesInListing
         , couldNotGetPageCountOfPDF CouldNotGetNumberOfPagesInListing
-        , gotTheImagesDimensions decodeTheImagesDimensions
         ]
 
 
