@@ -1,5 +1,4 @@
 // @ts-check
-import 'virtual:windi.css'
 import './style.css'
 import { Elm } from './Main.elm'
 import { Listing, ListingDocument, Page } from './Types'
@@ -7,7 +6,6 @@ import * as pdfMake from 'pdfmake/build/pdfmake'
 import * as pdfFonts from 'pdfmake/build/vfs_fonts'
 import { PageSizes, PDFDocument, PDFEmbeddedPage, PDFFont, PDFImage, PDFPage, StandardFonts } from 'pdf-lib'
 import { saveAs } from 'file-saver'
-
 (<any>pdfMake).vfs = pdfFonts.pdfMake.vfs
 
 //  Initialise

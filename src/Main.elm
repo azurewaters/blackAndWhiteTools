@@ -168,9 +168,9 @@ indexMaker model =
         ]
         [ Keyed.node "div"
             [ classList
-                [ ( "itemsHolder", True )
-                , ( "itemsHolderEmpty", List.length model.listings == 0 )
-                , ( "itemsHolderNonEmpty", List.length model.listings > 0 )
+                [ ( "min-h-full overflow-y-auto w-full grid grid-cols-1 gap-2", True )
+                , ( "content-center", List.length model.listings == 0 )
+                , ( "content-start justify-center", List.length model.listings > 0 )
                 ]
             , onFilesDrop FilesDropped
             , onDragOver NoOp
@@ -235,7 +235,8 @@ onDragEnd msg =
 listItem : Listing -> Html Msg
 listItem listing =
     div
-        [ class "listItem"
+        [ class "group w-full p-4 border border-gray-300 rounded-md grid gap-4 text-sm bg-gray-50 hover:bg-transparent"
+        , style "grid-template-columns" "1fr minmax(10px, min-content)"
         , onDragStart (ListingDragStart listing)
         , onDragOver NoOp
         , onDrop (ListingDrop listing)
@@ -243,10 +244,11 @@ listItem listing =
         , draggable "true"
         ]
         [ div
-            [ class "listItemDetailsContainer"
+            [ class "max-h-full w-full grid gap-2"
+            , style "grid-template-rows" "1fr min-content"
             ]
-            [ div [ class "listItemTitle" ] [ listing.title |> text ]
-            , div [ class "listItemStatus" ]
+            [ div [ class "overflow-auto max-w-full max-h-6" ] [ listing.title |> text ]
+            , div [ class "text-xs text-gray-400" ]
                 [ text
                     (case listing.numberOfPages of
                         Counting ->
@@ -264,10 +266,10 @@ listItem listing =
                 ]
             ]
         , div
-            [ class "listItemCancelButton"
+            [ class "cursor-pointer text-gray-500 rotate-45 invisible group-hover:visible"
             , onClick (ListItemsDeleteButtonClicked listing.id)
             ]
-            [ text "x" ]
+            [ text "+" ]
         ]
 
 

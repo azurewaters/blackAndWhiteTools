@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 * {
   @apply box-border;
 }
@@ -14,58 +18,10 @@ input {
 button {
   @apply px-4 py-2 h-12
     rounded-md
-    font-semibold text-md 
+    font-semibold 
     cursor-pointer
-    not-disabled:(bg-black text-white hover:(bg-gray-900))
-    disabled:(bg-gray-400 text-gray-200 hover:(text-gray-300 bg-gray-500));
-}
-
-.containerWithCenteredContent {
-  @apply grid grid-flow-col justify-center;
-}
-
-.itemsHolder {
-  @apply min-h-full overflow-y-auto w-full grid gap-2;
-}
-
-.itemsHolderEmpty {
-  @apply content-center;
-}
-
-.itemsHolderNonEmpty {
-  @apply
-    content-start
-    sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4
-  ;
-}
-
-.listItem {
-  @apply
-    group
-    max-w-md p-4
-    border-1 border-gray-300 rounded-md
-    bg-gray-100
-    grid gap-4
-    text-sm
-    hover:(bg-transparent);
-    grid-template-columns: 1fr minmax(10px, min-content);
-}
-
-.listItemDetailsContainer {
-  @apply max-h-full w-full grid gap-2
-  group-hover: text-red-500
-  ;
-  grid-template-rows: 1fr 10px;
-}
-
-.listItemTitle {
-  @apply overflow-auto max-w-full max-h-6;
-}
-
-.listItemStatus {
-  @apply text-xs text-gray-500;
-}
-
-.listItemCancelButton {
-  @apply cursor-pointer text-gray-500;
+    bg-black text-white
+    hover:bg-gray-900
+    disabled:bg-gray-400 disabled:text-gray-200 disabled:hover:text-gray-300 disabled:hover:bg-gray-500
+    ;
 }

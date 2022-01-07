@@ -1,3 +1,0 @@
-[{ file = <Canara Bank Pass Sheet - 14 Jan 2020 (dragged).pdf>, 
-	id = 1, index = 1, numberOfPages = HaveCounted 1, 
-  title = "Canara Bank Pass Sheet - 14 Jan 2020 (dragged)" },{ file = <Canara Bank Pass Sheet - 14 Jan 2020 (dragged) 2.pdf>, id = 2, index = 2, numberOfPages = HaveCounted 1, title = "Canara Bank Pass Sheet - 14 Jan 2020 (dragged) 2" }]: [{ file = <Canara Bank Pass Sheet - 14 Jan 2020 (dragged).pdf>, id = 1, index = 1, numberOfPages = HaveCounted 1, title = "Canara Bank Pass Sheet - 14 Jan 2020 (dragged)" },{ file = <Canara Bank Pass Sheet - 14 Jan 2020 (dragged) 2.pdf>, id = 2, index = 2, numberOfPages = HaveCounted 1, title = "Canara Bank Pass Sheet - 14 Jan 2020 (dragged) 2" }]
