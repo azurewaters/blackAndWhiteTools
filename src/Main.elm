@@ -125,7 +125,7 @@ viewRoot model =
 pageHeader : CurrentScreen -> Html Msg
 pageHeader currentPage =
     div [ class "grid grid-flow-col w-max gap-2 items-center" ]
-        [ img [ src "../src/logo.png", class "h-6" ] []
+        [ img [ src "assets/logo.png", class "h-6" ] []
         , div [ class "font-bold text-xl text-black pr-4" ] [ text "Pocketful of Sunshine" ]
         , navigationLink HomeLinkClicked (currentPage == Home) "Home"
         , navigationLink IndexMakerLinkClicked (currentPage == IndexMaker) "Index Maker"

@@ -6,7 +6,7 @@ import * as pdfMake from 'pdfmake/build/pdfmake'
 import * as pdfFonts from 'pdfmake/build/vfs_fonts'
 import { PageSizes, PDFDocument, PDFEmbeddedPage, PDFFont, PDFImage, PDFPage, StandardFonts } from 'pdf-lib'
 import { saveAs } from 'file-saver'
-(<any>pdfMake).vfs = pdfFonts.pdfMake.vfs
+// (<any>pdfMake).vfs = pdfFonts.pdfMake.vfs
 
 //  Initialise
 const app: any = Elm.Main.init({
@@ -62,7 +62,7 @@ async function generateTheIndexPages(listings: Listing[]): Promise<Blob> {
     ]
   }
 
-  const pdfDocGenerator = pdfMake.createPdf(docDefinition)
+  const pdfDocGenerator = pdfMake.createPdf(docDefinition, undefined, undefined, pdfFonts.pdfMake.vfs)
   return new Promise((resolve) => {
     pdfDocGenerator.getBlob((data: Blob) => {
       resolve(data)
