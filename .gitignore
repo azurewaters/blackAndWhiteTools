@@ -2,6 +2,8 @@ node_modules/
 dist/
 build/
 elm-stuff/
+.firebase/*
+*.cache
 
 # Logs
 logs
