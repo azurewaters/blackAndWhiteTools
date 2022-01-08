@@ -89,8 +89,8 @@ async function generateTheContentPages(listings: Listing[]): Promise<PDFDocument
   //  First prepare a document for each listing
   let documents: PDFDocument[] =
     (await Promise.all(listings.map(getListingsFileAsADocument)))
-      .sort((a, b) => { return a.listingId - b.listingId })
-      .map((ld) => ld.document)
+      .sort((a, b) => { return a.index - b.index })
+      .map((ld) => { return ld.document })
 
   //  Next, compile everything into one final document
   const finalDocument: PDFDocument = await PDFDocument.create()
@@ -136,11 +136,6 @@ async function getListingsFileAsADocument(listing: Listing): Promise<ListingDocu
         height: scaledDimensions.height
       })
     }
-    // await Promise.all(sourcePages.map(async sourcePage => {
-    //   //  Embed each page into the new document
-
-    //   return newPage
-    // }))
 
   } else if (fileType == 'image/png' || fileType == 'image/jpeg') {
 
@@ -160,7 +155,7 @@ async function getListingsFileAsADocument(listing: Listing): Promise<ListingDocu
   }
 
   //  Done
-  return { listingId: listing.id, document: document }
+  return { index: listing.index, document: document }
 }
 
 function putInThePageNumber(pageNumber: number, font: PDFFont, page: PDFPage) {

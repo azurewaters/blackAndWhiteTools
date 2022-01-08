@@ -155,7 +155,7 @@ home =
         [ h1 [] [ text "What is Pocketful of Sunshine?" ]
         , p [] [ text "Pocketful of Sunshine is a home for tiny, niche tools. Maybe they'll be of use to you, or maybe to someone you know?" ]
         , h1 [] [ text "What is an Index Maker?" ]
-        , p [] [ text "The Index Maker is Drag in a bunch of PDFs or images (maybe screenshots or photographs) and the Index Maker will put these together into a single PDF and number all the pages. It'll also create a contents page. Best way to understand what it does is to take it for a spin!" ]
+        , p [] [ text "Drag in a bunch of PDFs or images and the Index Maker will put these together into a single PDF and number all the pages. It'll also create a contents page. Best way to understand what it does is to take it for a spin!" ]
         , h1 [] [ text "Does any of this cost anything?" ]
         , p [] [ text "Nope. Use it to your heart's content. Tell your friends about it." ]
         ]

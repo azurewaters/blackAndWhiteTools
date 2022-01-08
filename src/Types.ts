@@ -20,7 +20,7 @@ interface Page {
 }
 
 interface ListingDocument {
-  listingId: number,
+  index: number,
   document: PDFDocument
 }
 
