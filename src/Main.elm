@@ -2,8 +2,8 @@ port module Main exposing (main)
 
 import Browser
 import File exposing (File)
-import Html exposing (Attribute, Html, a, button, div, text)
-import Html.Attributes exposing (class, classList, disabled, draggable, id, style)
+import Html exposing (Attribute, Html, a, button, div, h1, img, p, text)
+import Html.Attributes exposing (class, classList, disabled, draggable, id, src, style)
 import Html.Events exposing (on, onClick, preventDefaultOn)
 import Html.Keyed as Keyed
 import Json.Decode as Decode exposing (Decoder, Error(..), value)
@@ -81,7 +81,7 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    ( { currentScreen = IndexMaker
+    ( { currentScreen = Home
       , listings = []
       , pages = []
       , lastListingsId = 0
@@ -97,7 +97,7 @@ init _ =
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "Pocketful of Sunshine - Tools"
+    { title = "Pocketful of Sunshine - Nice, niche tools"
     , body = [ viewRoot model ]
     }
 
@@ -124,12 +124,11 @@ viewRoot model =
 
 pageHeader : CurrentScreen -> Html Msg
 pageHeader currentPage =
-    div [ class "grid grid-flow-col content-end w-full gap-8 w-max" ]
-        [ div [ class "font-bold text-xl text-black" ] [ text "Pocketful of Sunshine" ]
-        , div [ class "grid grid-flow-col gap-4 w-max content-end" ]
-            [ navigationLink HomeLinkClicked (currentPage == Home) "Home"
-            , navigationLink IndexMakerLinkClicked (currentPage == IndexMaker) "Index Maker"
-            ]
+    div [ class "grid grid-flow-col w-max gap-2 items-center" ]
+        [ img [ src "../src/logo.png", class "h-6" ] []
+        , div [ class "font-bold text-xl text-black pr-4" ] [ text "Pocketful of Sunshine" ]
+        , navigationLink HomeLinkClicked (currentPage == Home) "Home"
+        , navigationLink IndexMakerLinkClicked (currentPage == IndexMaker) "Index Maker"
         ]
 
 
@@ -145,14 +144,21 @@ navigationLink msg show linkText =
 
 pageFooter : Html Msg
 pageFooter =
-    div [ class "w-full flex justify-center text-xs text-gray-500 pt-4 pb-4" ]
-        [ text "© 2021 azurewaters.in"
+    div [ class "w-full flex justify-center text-xs text-gray-300 pt-4 pb-4" ]
+        [ text "Copyright © 2022 Pocketful of Sunshine. All rights reserved. Terms and Conditions Apply"
         ]
 
 
 home : Html Msg
 home =
-    div [] [ text "Home" ]
+    div []
+        [ h1 [] [ text "What is Pocketful of Sunshine?" ]
+        , p [] [ text "Pocketful of Sunshine is a home for tiny, niche tools. Maybe they'll be of use to you, or maybe to someone you know?" ]
+        , h1 [] [ text "What is an Index Maker?" ]
+        , p [] [ text "The Index Maker is Drag in a bunch of PDFs or images (maybe screenshots or photographs) and the Index Maker will put these together into a single PDF and number all the pages. It'll also create a contents page. Best way to understand what it does is to take it for a spin!" ]
+        , h1 [] [ text "Does any of this cost anything?" ]
+        , p [] [ text "Nope. Use it to your heart's content. Tell your friends about it." ]
+        ]
 
 
 indexMaker : Model -> Html Msg
@@ -486,7 +492,7 @@ update msg model =
                                         createPagesForPDF l
 
                                     Nothing ->
-                                        Debug.log "No pages" []
+                                        []
                            )
             in
             ( { model | listings = updatedListings, pages = model.pages ++ newPages }, Cmd.none )
@@ -517,29 +523,10 @@ update msg model =
 
         DownloadDocumentButtonClicked ->
             let
-                {--
-                    This button is clickable only when each listing's pages have been counted and a PDF's pages have been processed.
-                    Step 1: Make the index
-                        Arrange the listings by index number
-                        Calculate each listing's page numbers
-                        Output the index, title and page numbers into a table row each, and then wrap that into a table
-                        Put that table into a page
-                    Step 2: Make the individual pages
-                        Wrap each image in each listing with a page tag
-                --}
-                indexPages : String
-                indexPages =
-                    makeAnIndex model.listings
-
-                innerPages : String
-                innerPages =
-                    makeTheInnerPages model.listings model.pages
-
                 dataToSendOut : Encode.Value
                 dataToSendOut =
                     Encode.object
-                        [ ( "template", indexPages ++ innerPages |> Encode.string )
-                        , ( "listings", encodeListings model.listings )
+                        [ ( "listings", encodeListings model.listings )
                         , ( "pages", encodePages model.pages )
                         ]
             in
@@ -621,144 +608,6 @@ listingsPagesStillBeingCounted listings =
         |> List.member Counting
 
 
-makeTheInnerPages : Listings -> Pages -> String
-makeTheInnerPages listings pages =
-    let
-        listingsPages : List String
-        listingsPages =
-            listings
-                |> calculatePageNumbers 0
-                |> List.map (\l -> renderThisListingsPages l pages)
-    in
-    listingsPages
-        |> String.join ""
-
-
-renderThisListingsPages : Listing -> Pages -> String
-renderThisListingsPages listing pages =
-    let
-        thisListingsPages : Pages
-        thisListingsPages =
-            List.filter (\p -> p.listingId == listing.id) pages
-    in
-    renderPages thisListingsPages "" listing.startingPageNumber
-
-
-renderPages : Pages -> String -> Int -> String
-renderPages pagesToRender renderedPages thisPagesNumber =
-    case pagesToRender of
-        head :: tail ->
-            renderPages
-                tail
-                (renderedPages ++ renderPage head thisPagesNumber)
-                (thisPagesNumber + 1)
-
-        [] ->
-            renderedPages
-
-
-renderPage : Page -> Int -> String
-renderPage page pageNumber =
-    let
-        -- The units used in Word is dxa which is 1/20th of a point. Meaning, there are 20 dxas in 1 pt.
-        --  1 cm = 28.3465 pts
-        --  1 cm = 28.3464566929px @72px/inch
-        --  1 pt = 1.333 pixels
-        --  Unit converter: https://unit-converter.kurylk.in
-        maxHeight : Float
-        maxHeight =
-            -- In pts
-            --  297 mm is 841.89 pts. This is equivalent to 16837.79527559 twips.
-            29.7 * 28.3465
-
-        maxWidth : Float
-        maxWidth =
-            --  In pts
-            --  210 mm is 595.276 pts. This is equivalent to 11905.511811024 twips.
-            21 * 28.3456
-
-        imageHeight : Float
-        imageHeight =
-            --  In pts
-            Basics.toFloat page.naturalHeight / 1.333
-
-        imageWidth : Float
-        imageWidth =
-            --  In pts
-            Basics.toFloat page.naturalWidth / 1.333
-
-        ( finalHeight, finalWidth ) =
-            let
-                ratio =
-                    Basics.min (maxHeight / imageHeight) (maxWidth / imageWidth)
-            in
-            ( imageHeight * ratio, imageWidth * ratio )
-    in
-    """
-    <page header="alignment: right; format:@pageNumber">
-        <p><img data-listingId="@listingId" data-pageId="@pageId" height="@height" width="@width"/></p>
-    </page>
-    """
-        |> String.replace "@listingId" (String.fromInt page.listingId)
-        |> String.replace "@pageId" (String.fromInt page.id)
-        |> String.replace "@pageNumber" (String.fromInt pageNumber)
-        |> String.replace "@height" (String.fromFloat finalHeight)
-        |> String.replace "@width" (String.fromFloat finalWidth)
-
-
-makeAnIndex : Listings -> String
-makeAnIndex listings =
-    let
-        tableHeader : String
-        tableHeader =
-            (wrapInATag "span" "bold=\"true\"" "Serial" |> wrapInATag "cell" "width=\"10\"")
-                ++ (wrapInATag "span" "bold=\"true\"" "Title" |> wrapInATag "cell" "")
-                ++ (wrapInATag "span" "bold=\"true\"" "Page(s)" |> wrapInATag "cell" "width=\"20\"")
-                |> wrapInATag "row" "tableHeader=\"true\""
-
-        tableRows : String
-        tableRows =
-            listings
-                |> calculatePageNumbers 0
-                |> List.map makeAListingIndexRow
-                |> String.join ""
-    in
-    tableHeader
-        ++ tableRows
-        |> wrapInATag "table" "width=\"100%\""
-        |> wrapInATag "page" ""
-
-
-indexRowTemplate : String
-indexRowTemplate =
-    (wrapInATag "span" "" "@Serial" |> wrapInATag "cell" "align=\"right\"; width=\"10\"")
-        ++ (wrapInATag "span" "" "@Title" |> wrapInATag "cell" "align=\"left\"")
-        ++ (wrapInATag "span" "" "@Pages" |> wrapInATag "cell" "align=\"right\"; width=\"20\"")
-        |> wrapInATag "row" ""
-
-
-makeAListingIndexRow : Listing -> String
-makeAListingIndexRow listing =
-    indexRowTemplate
-        |> String.replace "@Serial" (String.fromInt listing.index)
-        |> String.replace "@Title" (" " ++ listing.title)
-        |> String.replace "@Pages" (getPageNumberString listing.startingPageNumber listing.endingPageNumber)
-
-
-getPageNumberString : Int -> Int -> String
-getPageNumberString startingPageNumber endingPageNumber =
-    if startingPageNumber == endingPageNumber then
-        String.fromInt startingPageNumber
-
-    else
-        String.fromInt startingPageNumber ++ " - " ++ String.fromInt endingPageNumber
-
-
-wrapInATag : String -> String -> String -> String
-wrapInATag tag configuration data =
-    "<" ++ tag ++ " " ++ configuration ++ ">" ++ data ++ "</" ++ tag ++ ">"
-
-
 removeFileExtension : String -> String
 removeFileExtension filename =
     filename
@@ -770,26 +619,6 @@ removeFileExtension filename =
 reIndexListings : Listings -> Listings
 reIndexListings listings =
     List.map2 (\l i -> { l | index = i }) listings (List.range 1 (List.length listings))
-
-
-calculatePageNumbers : Int -> Listings -> Listings
-calculatePageNumbers lastListingsEndingPageNumber remainingListings =
-    case remainingListings of
-        head :: tail ->
-            let
-                numberOfPages : Int
-                numberOfPages =
-                    case head.numberOfPages of
-                        Counted x ->
-                            x
-
-                        _ ->
-                            0
-            in
-            { head | startingPageNumber = lastListingsEndingPageNumber + 1, endingPageNumber = lastListingsEndingPageNumber + numberOfPages } :: calculatePageNumbers (lastListingsEndingPageNumber + numberOfPages) tail
-
-        [] ->
-            []
 
 
 encodeListingIdAndFile : Id -> Encode.Value -> Encode.Value
@@ -837,8 +666,8 @@ decodeNumberOfPagesInListing value =
         Ok numberOfPages ->
             GotNumberOfPagesInListing numberOfPages
 
-        Err e ->
-            Debug.log (Debug.toString e) NoOp
+        Err _ ->
+            NoOp
 
 
 subscriptions : Model -> Sub Msg

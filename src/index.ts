@@ -28,7 +28,7 @@ async function getThePageCountOfThePDF(listing: Listing): Promise<void> {
   }
 }
 
-async function generateADocument(e: { template: string, listings: Listing[], pages: Page[] }): Promise<void> {
+async function generateADocument(e: { listings: Listing[], pages: Page[] }): Promise<void> {
   //  First, geenrate the index pages
   //  Next, generate all the content pages
   //  Combine the two
