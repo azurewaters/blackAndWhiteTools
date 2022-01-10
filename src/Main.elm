@@ -33,18 +33,6 @@ type PageCount
     | Unvailable --  An error of some sort occurred
 
 
-type alias Page =
-    { listingId : Id
-    , id : Id --  Zero based
-    , naturalHeight : Int
-    , naturalWidth : Int
-    }
-
-
-type alias Pages =
-    List Page
-
-
 type alias NumberOfPagesInListing =
     { listingId : Int
     , pageCount : Int
@@ -69,7 +57,6 @@ type alias Listings =
 type alias Model =
     { currentScreen : CurrentScreen
     , listings : Listings
-    , pages : Pages
     , lastListingsId : Int --  lastListingsId used in calculating page numbers
     , listingBeingDragged : Maybe Listing
     }
@@ -83,7 +70,6 @@ init : Flags -> ( Model, Cmd Msg )
 init _ =
     ( { currentScreen = Home
       , listings = []
-      , pages = []
       , lastListingsId = 0
       , listingBeingDragged = Nothing
       }
@@ -254,7 +240,7 @@ onDragEnd msg =
 listItem : Listing -> Html Msg
 listItem listing =
     div
-        [ class "group w-full p-4 border border-gray-300 rounded-md grid gap-4 text-sm bg-gray-50 hover:bg-transparent"
+        [ class "group w-full p-4 border border-gray-300 rounded-md grid gap-4 text-sm bg-gray-50 hover:bg-white"
         , style "grid-template-columns" "1fr minmax(10px, min-content)"
         , onDragStart (ListingDragStart listing)
         , onDragOver NoOp
@@ -266,7 +252,7 @@ listItem listing =
             [ class "max-h-full w-full grid gap-2"
             , style "grid-template-rows" "1fr min-content"
             ]
-            [ div [ class "overflow-auto max-w-full max-h-6" ] [ listing.title |> text ]
+            [ div [ class "cursor-move overflow-auto max-w-full max-h-6" ] [ listing.title |> text ]
             , div [ class "text-xs text-gray-400" ]
                 [ text
                     (case listing.numberOfPages of
@@ -390,22 +376,6 @@ update msg model =
                         newIds
                         newIndexes
 
-                newPages : Pages
-                newPages =
-                    List.filterMap
-                        (\l ->
-                            Maybe.andThen
-                                (\f ->
-                                    if File.mime f /= "application/pdf" then
-                                        Page l.id 0 0 0 |> Just
-
-                                    else
-                                        Nothing
-                                )
-                                (decodeFile l.file)
-                        )
-                        newListings
-
                 newCommands : List (Cmd Msg)
                 newCommands =
                     List.map
@@ -422,7 +392,6 @@ update msg model =
             ( { model
                 | listings = List.append model.listings newListings
                 , lastListingsId = model.lastListingsId + List.length newListings
-                , pages = model.pages ++ newPages
               }
             , Cmd.batch newCommands
             )
@@ -432,15 +401,8 @@ update msg model =
                 updatedListings : Listings
                 updatedListings =
                     List.filter (\l -> l.id == id |> not) model.listings
-
-                updatedPages : Pages
-                updatedPages =
-                    List.filter (\p -> p.listingId /= id) model.pages
             in
-            ( { model
-                | listings = reIndexListings updatedListings
-                , pages = updatedPages
-              }
+            ( { model | listings = reIndexListings updatedListings }
             , Cmd.none
             )
 
@@ -497,21 +459,8 @@ update msg model =
 
                 --  Since it's a bunch of PDF pages, they'll occupy the maximum space allowed
                 --  And, we know the number of pages, so we'll just create the pages
-                newPages : Pages
-                newPages =
-                    updatedListings
-                        |> List.filter (\l -> l.id == numberOfPagesInListing.listingId)
-                        |> List.head
-                        |> (\maybeListing ->
-                                case maybeListing of
-                                    Just l ->
-                                        createPagesForPDF l
-
-                                    Nothing ->
-                                        []
-                           )
             in
-            ( { model | listings = updatedListings, pages = model.pages ++ newPages }, Cmd.none )
+            ( { model | listings = updatedListings }, Cmd.none )
 
         CouldNotGetNumberOfPagesInListing listingId ->
             let
@@ -530,49 +479,31 @@ update msg model =
             ( { model | listings = updatedListings }, Cmd.none )
 
         ClearAllButtonClicked ->
-            ( { model
-                | listings = []
-                , pages = []
-              }
+            ( { model | listings = [] }
             , Cmd.none
             )
 
         DownloadDocumentButtonClicked ->
             let
+                validListings : Listings
+                validListings =
+                    model.listings
+                        |> List.filter
+                            (\l ->
+                                case l.numberOfPages of
+                                    Counted _ ->
+                                        True
+
+                                    _ ->
+                                        False
+                            )
+
                 dataToSendOut : Encode.Value
                 dataToSendOut =
                     Encode.object
-                        [ ( "listings", encodeListings model.listings )
-                        , ( "pages", encodePages model.pages )
-                        ]
+                        [ ( "listings", encodeListings validListings ) ]
             in
             ( model, generateADocument dataToSendOut )
-
-
-createPagesForPDF : Listing -> Pages
-createPagesForPDF listing =
-    case listing.numberOfPages of
-        Counted n ->
-            List.range 0 (n - 1)
-                |> List.map (\pageId -> Page listing.id pageId (29.7 * 28.3465 |> Basics.round) (21 * 28.3456 |> Basics.round))
-
-        _ ->
-            []
-
-
-encodePages : Pages -> Encode.Value
-encodePages pages =
-    Encode.list pageEncoder pages
-
-
-pageEncoder : Page -> Encode.Value
-pageEncoder page =
-    Encode.object
-        [ ( "listingId", Encode.int page.listingId )
-        , ( "id", Encode.int page.id )
-        , ( "naturalHeight", Encode.int page.naturalHeight )
-        , ( "naturalWidth", Encode.int page.naturalWidth )
-        ]
 
 
 encodeListings : Listings -> Encode.Value
