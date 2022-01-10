@@ -151,13 +151,23 @@ pageFooter =
 
 home : Html Msg
 home =
-    div []
-        [ h1 [] [ text "What is Pocketful of Sunshine?" ]
-        , p [] [ text "Pocketful of Sunshine is a home for tiny, niche tools. Maybe they'll be of use to you, or maybe to someone you know?" ]
-        , h1 [] [ text "What is an Index Maker?" ]
-        , p [] [ text "Drag in a bunch of PDFs or images and the Index Maker will put these together into a single PDF and number all the pages. It'll also create a contents page. Best way to understand what it does is to take it for a spin!" ]
-        , h1 [] [ text "Does any of this cost anything?" ]
-        , p [] [ text "Nope. Use it to your heart's content. Tell your friends about it." ]
+    div [ class "grid grid-cols-2 gap-4 items-center justify-items-center" ]
+        [ div [ class "p-8" ]
+            [ h1 [] [ text "What is Pocketful of Sunshine?" ]
+            , p [] [ text "Pocketful of Sunshine is a home for tiny, nice, niche tools. Maybe they'll be of use to you or someone you know." ]
+            ]
+        , img [ class "w-1/4 max-h-32", src "assets/sun.svg" ] []
+        , img [ class "w-1/4 max-h-32", src "assets/index.svg" ] []
+        , div [ class "p-8" ]
+            [ h1 [] [ text "What is an Index Maker?" ]
+            , p [] [ text "Drag in a bunch of PDFs or images and the Index Maker will put these together into a single PDF and number all the pages. It'll also create a contents page. Best way to understand what it does is to take it for a spin!" ]
+            , button [ onClick IndexMakerLinkClicked ] [ text "Go to Index Maker" ]
+            ]
+        , div [ class "p-8" ]
+            [ h1 [] [ text "Does any of this cost anything?" ]
+            , p [] [ text "Nope. Use it to your heart's content. Tell your friends about it." ]
+            ]
+        , img [ class "w-1/4 max-h-32", src "assets/free.svg" ] []
         ]
 
 
@@ -184,8 +194,11 @@ indexMaker model =
             (if List.length model.listings == 0 then
                 [ ( "empty"
                   , div
-                        [ class "text-gray-400 mx-auto" ]
-                        [ text "Drag your PDFs, JPEGs and PNGs here." ]
+                        [ class "text-gray-400 mx-auto grid grid-cols-1 justify-items-center gap-4" ]
+                        [ div [] [ text "Drop your PDFs, JPEGs and PNGs here." ]
+                        , div [] [ text "Drag to reorder them." ]
+                        , div [] [ text "You have total privacy. None of your documents leave your computer." ]
+                        ]
                   )
                 ]
 
@@ -272,10 +285,13 @@ listItem listing =
                 ]
             ]
         , div
-            [ class "cursor-pointer text-gray-500 rotate-45 invisible group-hover:visible"
-            , onClick (ListItemsDeleteButtonClicked listing.id)
+            []
+            [ div
+                [ class "cursor-pointer text-gray-500 rotate-45 invisible group-hover:visible"
+                , onClick (ListItemsDeleteButtonClicked listing.id)
+                ]
+                [ text "+" ]
             ]
-            [ text "+" ]
         ]
 
 
