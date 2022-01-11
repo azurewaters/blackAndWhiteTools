@@ -59,6 +59,7 @@ type alias Model =
     , listings : Listings
     , lastListingsId : Int --  lastListingsId used in calculating page numbers
     , listingBeingDragged : Maybe Listing
+    , idOfListingBeingDraggedOver : Id
     }
 
 
@@ -72,6 +73,7 @@ init _ =
       , listings = []
       , lastListingsId = 0
       , listingBeingDragged = Nothing
+      , idOfListingBeingDraggedOver = -1
       }
     , Cmd.none
     )
@@ -189,10 +191,16 @@ indexMaker model =
                 ]
 
              else
-                List.map (\l -> ( l.id |> String.fromInt, listItem l )) model.listings
+                List.map
+                    (\l ->
+                        ( l.id |> String.fromInt
+                        , listItem l model.listingBeingDragged model.idOfListingBeingDraggedOver
+                        )
+                    )
+                    model.listings
             )
         , div
-            [ class "grid grid-flow-col auto-cols-max justify-between gap-x-4 mt-4" ]
+            [ class "grid grid-flow-col auto-cols-max gap-x-4 mt-4 justify-between items-center" ]
             [ button
                 [ onClick ClearAllButtonClicked
                 , disabled (List.length model.listings == 0)
@@ -237,13 +245,34 @@ onDragEnd msg =
     on "dragend" (Decode.succeed msg)
 
 
-listItem : Listing -> Html Msg
-listItem listing =
+listItem : Listing -> Maybe Listing -> Id -> Html Msg
+listItem listing maybeListingBeingDragged idOfListingBeingDraggedOver =
     div
-        [ class "group w-full p-4 border border-gray-300 rounded-md grid gap-4 text-sm bg-gray-50 hover:bg-white"
+        [ class "group w-full p-4 border border-gray-300 rounded-md grid gap-4 text-sm text-gray-500 bg-gray-50 hover:text-black hover:bg-white"
+        , classList
+            [ ( "hover:bg-gray-300"
+              , case maybeListingBeingDragged of
+                    Just listingBeingDragged ->
+                        listing.id == listingBeingDragged.id
+
+                    Nothing ->
+                        False
+              )
+            , ( "bg-gray-300"
+              , listing.id == idOfListingBeingDraggedOver
+              )
+            , ( "bg-red-500 border-red-500 text-white"
+              , case listing.numberOfPages of
+                    Unvailable ->
+                        True
+
+                    _ ->
+                        False
+              )
+            ]
         , style "grid-template-columns" "1fr minmax(10px, min-content)"
         , onDragStart (ListingDragStart listing)
-        , onDragOver NoOp
+        , onDragOver (ListingDragOver listing.id)
         , onDrop (ListingDrop listing)
         , onDragEnd ListingDragEnd
         , draggable "true"
@@ -292,6 +321,7 @@ type Msg
     | FilesDropped (List Encode.Value)
     | ListItemsDeleteButtonClicked Id
     | ListingDragStart Listing
+    | ListingDragOver Id
     | ListingDrop Listing
     | ListingDragEnd
     | GotNumberOfPagesInListing NumberOfPagesInListing
@@ -392,6 +422,8 @@ update msg model =
             ( { model
                 | listings = List.append model.listings newListings
                 , lastListingsId = model.lastListingsId + List.length newListings
+                , listingBeingDragged = Nothing
+                , idOfListingBeingDraggedOver = -1
               }
             , Cmd.batch newCommands
             )
@@ -408,6 +440,9 @@ update msg model =
 
         ListingDragStart listing ->
             ( { model | listingBeingDragged = Just listing }, Cmd.none )
+
+        ListingDragOver listingId ->
+            ( { model | idOfListingBeingDraggedOver = listingId }, Cmd.none )
 
         ListingDrop listingDroppedOn ->
             let
@@ -436,10 +471,21 @@ update msg model =
                         |> List.sortBy .index
                         |> reIndexListings
             in
-            ( { model | listings = newListings }, Cmd.none )
+            ( { model
+                | listings = newListings
+                , listingBeingDragged = Nothing
+                , idOfListingBeingDraggedOver = -1
+              }
+            , Cmd.none
+            )
 
         ListingDragEnd ->
-            ( { model | listingBeingDragged = Nothing }, Cmd.none )
+            ( { model
+                | listingBeingDragged = Nothing
+                , idOfListingBeingDraggedOver = -1
+              }
+            , Cmd.none
+            )
 
         GotNumberOfPagesInListing numberOfPagesInListing ->
             let
@@ -456,9 +502,6 @@ update msg model =
                                 l
                         )
                         model.listings
-
-                --  Since it's a bunch of PDF pages, they'll occupy the maximum space allowed
-                --  And, we know the number of pages, so we'll just create the pages
             in
             ( { model | listings = updatedListings }, Cmd.none )
 

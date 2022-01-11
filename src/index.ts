@@ -107,7 +107,7 @@ async function generateTheContentPages(listings: Listing[]): Promise<PDFDocument
     }
   }
 
-  // //  Return the document
+  //  Return the document
   return finalDocument
 }
 
