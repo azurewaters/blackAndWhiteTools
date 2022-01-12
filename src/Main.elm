@@ -139,23 +139,23 @@ pageFooter =
 
 home : Html Msg
 home =
-    div [ class "grid grid-cols-2 gap-4 items-center justify-items-center" ]
-        [ div [ class "p-8" ]
+    div [ class "grid grid-cols-1 md:grid-cols-2 gap-16 items-center lg:text-lg xl:text-xl 2xl:text-2xl" ]
+        [ img [ class "w-1/4 justify-self-center", src "assets/sun.svg" ] []
+        , div [ class "p-8" ]
             [ h1 [] [ text "What is Pocketful of Sunshine?" ]
             , p [] [ text "Pocketful of Sunshine is a home for tiny, nice, niche tools. Maybe they'll be of use to you or someone you know." ]
             ]
-        , img [ class "w-1/4 max-h-32", src "assets/sun.svg" ] []
-        , img [ class "w-1/4 max-h-32", src "assets/index.svg" ] []
+        , img [ class "w-1/4 justify-self-center", src "assets/index.svg" ] []
         , div [ class "p-8" ]
             [ h1 [] [ text "What is an Index Maker?" ]
             , p [] [ text "Drag in a bunch of PDFs or images and the Index Maker will put these together into a single PDF and number all the pages. It'll also create a contents page. Best way to understand what it does is to take it for a spin!" ]
             , button [ onClick IndexMakerLinkClicked ] [ text "Go to Index Maker" ]
             ]
+        , img [ class "w-1/4 justify-self-center", src "assets/free.svg" ] []
         , div [ class "p-8" ]
             [ h1 [] [ text "Does any of this cost anything?" ]
             , p [] [ text "Nope. Use it to your heart's content. Tell your friends about it." ]
             ]
-        , img [ class "w-1/4 max-h-32", src "assets/free.svg" ] []
         ]
 
 
