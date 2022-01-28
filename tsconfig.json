@@ -3,5 +3,8 @@
     "target": "es2020",
     "moduleResolution": "node",
     "strict": true
-  }
+  },
+  "files": [
+    "./node_modules/tesseract.js/src/index.d.ts"
+  ]
 }

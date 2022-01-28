@@ -1,11 +1,14 @@
 // @ts-check
 import './style.css'
 import { Elm } from './Main.elm'
-import { Listing, ListingDocument, Page } from './Types'
+import { Listing, ListingDocument, OCRListingFile, Page } from './Types'
 import * as pdfMake from 'pdfmake/build/pdfmake'
 import * as pdfFonts from 'pdfmake/build/vfs_fonts'
 import { PageSizes, PDFDocument, PDFEmbeddedPage, PDFFont, PDFImage, PDFPage, StandardFonts } from 'pdf-lib'
 import { saveAs } from 'file-saver'
+
+import { recogniseTextInTheseFiles } from './ocr'
+
 // (<any>pdfMake).vfs = pdfFonts.pdfMake.vfs
 
 //  Initialise
@@ -16,6 +19,7 @@ const app: any = Elm.Main.init({
 //  Subscribe to ports
 app.ports.getThePageCountOfThePDF.subscribe(getThePageCountOfThePDF)
 app.ports.generateADocument.subscribe(generateADocument)
+app.ports.ocrTheseDocuments.subscribe(ocrTheseDocuments)
 
 async function getThePageCountOfThePDF(listing: Listing): Promise<void> {
   //  Find the number of pages
@@ -168,4 +172,15 @@ function putInThePageNumber(pageNumber: number, font: PDFFont, page: PDFPage) {
 
   page.moveTo(page.getWidth() - widthOfPageNumber - rightMargin, 1 * heightOfPageNumber)
   page.drawText(pageNumberAsString, { size: fontSizeOfPageNumber })
+}
+
+
+
+/****** OCR *********/
+async function ocrTheseDocuments(ocrListingFiles: OCRListingFile[]): Promise<void> {
+  console.log(ocrListingFiles)
+  //  Now, differentiate between images and PDFs
+  let results = await recogniseTextInTheseFiles(ocrListingFiles)
+  //  Send the results to Elm
+  console.log(results)
 }

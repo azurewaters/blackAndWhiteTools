@@ -24,6 +24,8 @@
   "dependencies": {
     "file-saver": "^2.0.5",
     "pdf-lib": "^1.17.1",
-    "pdfmake": "^0.2.4"
+    "pdfmake": "^0.2.4",
+    "tesseract.js": "^2.1.5",
+    "tesseract.js-core": "^2.2.0"
   }
 }

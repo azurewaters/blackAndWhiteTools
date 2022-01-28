@@ -1,6 +1,7 @@
 // @ts-check
 
 import { PDFDocument } from "pdf-lib"
+import Tesseract from "tesseract.js"
 
 interface Listing {
   id: number,
@@ -24,4 +25,14 @@ interface ListingDocument {
   document: PDFDocument
 }
 
-export { Listing, Page, ListingDocument }
+interface OCRListingFile {
+  ocrListingId: number,
+  file: File
+}
+
+interface OCRRecognitionResult {
+  ocrListingId: number,
+  text: string
+}
+
+export { Listing, Page, ListingDocument, OCRListingFile, OCRRecognitionResult }

@@ -2,7 +2,7 @@ port module Main exposing (main)
 
 import Browser
 import File exposing (File)
-import Html exposing (Attribute, Html, a, button, div, h1, img, p, text)
+import Html exposing (Attribute, Html, a, button, div, h1, img, p, progress, text)
 import Html.Attributes exposing (class, classList, disabled, draggable, id, src, style)
 import Html.Events exposing (on, onClick, preventDefaultOn)
 import Html.Keyed as Keyed
@@ -17,6 +17,7 @@ import Json.Encode as Encode
 type CurrentScreen
     = Home
     | IndexMaker
+    | OCR
 
 
 type alias Id =
@@ -54,12 +55,31 @@ type alias Listings =
     List Listing
 
 
+type alias OCRListing =
+    { id : Int
+    , file : Encode.Value
+    , title : String
+    , progress : Float
+    }
+
+
+type alias OCRListings =
+    List OCRListing
+
+
+type alias OCRListingFile =
+    { ocrListingId : Int
+    , file : Encode.Value
+    }
+
+
 type alias Model =
     { currentScreen : CurrentScreen
     , listings : Listings
     , lastListingsId : Int --  lastListingsId used in calculating page numbers
     , listingBeingDragged : Maybe Listing
     , idOfListingBeingDraggedOver : Id
+    , ocrListings : List OCRListing
     }
 
 
@@ -69,11 +89,12 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    ( { currentScreen = Home
+    ( { currentScreen = OCR
       , listings = []
       , lastListingsId = 0
       , listingBeingDragged = Nothing
       , idOfListingBeingDraggedOver = -1
+      , ocrListings = []
       }
     , Cmd.none
     )
@@ -105,6 +126,9 @@ viewRoot model =
 
                 IndexMaker ->
                     indexMaker model
+
+                OCR ->
+                    ocr model
             ]
         , pageFooter
         ]
@@ -181,11 +205,10 @@ indexMaker model =
             ]
             (if List.length model.listings == 0 then
                 [ ( "empty"
-                  , div
-                        [ class "text-gray-400 mx-auto grid grid-cols-1 justify-items-center gap-4" ]
-                        [ div [] [ text "Drop your PDFs, JPEGs and PNGs here." ]
-                        , div [] [ text "Drag to reorder them." ]
-                        , div [] [ text "You have total privacy. None of your documents leave your computer." ]
+                  , placeholderMessages
+                        [ "Drop your PDFs, JPEGs and PNGs here."
+                        , "Drag to reorder them."
+                        , "You have total privacy. None of your documents leave your computer."
                         ]
                   )
                 ]
@@ -213,6 +236,13 @@ indexMaker model =
                 [ text "Download" ]
             ]
         ]
+
+
+placeholderMessages : List String -> Html Msg
+placeholderMessages messages =
+    div
+        [ class "text-gray-400 mx-auto grid grid-cols-1 justify-items-center gap-4" ]
+        (List.map (\m -> div [] [ text m ]) messages)
 
 
 onDragStart : Msg -> Attribute Msg
@@ -310,7 +340,66 @@ listItem listing maybeListingBeingDragged idOfListingBeingDraggedOver =
         ]
 
 
+ocr : Model -> Html Msg
+ocr model =
+    Keyed.node "div"
+        [ class "min-h-full max-h-full grid grid-flow-row gap-4"
+        , onFilesDrop FilesToBeOCRedDropped
+        , onDragOver NoOp
+        ]
+        (case model.ocrListings of
+            [] ->
+                [ ( "empty"
+                  , placeholderMessages
+                        [ "To make a photo of a document searchable, drag and drop it here."
+                        , "Only PDF, PNG and JPEGS allowed."
+                        , "You have total privacy. None of your documents leave your computer."
+                        ]
+                  )
+                ]
 
+            _ ->
+                List.map
+                    (\l -> ( l.id |> String.fromInt, ocrItem l ))
+                    model.ocrListings
+        )
+
+
+ocrItem : OCRListing -> Html Msg
+ocrItem ocrListing =
+    div
+        [ class "static" ]
+        [ div
+            [ class "grid"
+            , style "grid-cols-template" "1fr min-content min-content"
+            ]
+            [ div [] [ ocrListing.title |> text ]
+            , progress
+                [ ocrListing.progress |> String.fromFloat |> Html.Attributes.value
+                , Html.Attributes.max "1"
+                , class "bg-black border-gray-300"
+                ]
+                []
+            ]
+        , div
+            [ class "cursor-pointer text-gray-500 rotate-45 absolute top-2 right-2 invisible group-hover:visible"
+            , onClick (OCRItemsDeleteButtonClicked ocrListing.id)
+            ]
+            [ text "+" ]
+        ]
+
+
+
+-- posOCR : Encode.Value -> Html Msg
+-- posOCR file =
+--     node "pos-ocr"
+--         [ property "document" file
+--         , class "hidden"
+--         -- , on "recognisedText" <|
+--         --     Decode.map GotRecognisedText <|
+--         --         Decode.at [ "detail", "recognisedText" ] Decode.string
+--         ]
+--         []
 -- UPDATE
 
 
@@ -318,6 +407,7 @@ type Msg
     = NoOp
     | HomeLinkClicked
     | IndexMakerLinkClicked
+      -- Index Maker Messages
     | FilesDropped (List Encode.Value)
     | ListItemsDeleteButtonClicked Id
     | ListingDragStart Listing
@@ -328,6 +418,9 @@ type Msg
     | CouldNotGetNumberOfPagesInListing Id
     | ClearAllButtonClicked
     | DownloadDocumentButtonClicked
+      --  OCR Messages
+    | FilesToBeOCRedDropped (List Encode.Value)
+    | OCRItemsDeleteButtonClicked Id
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -548,6 +641,61 @@ update msg model =
             in
             ( model, generateADocument dataToSendOut )
 
+        FilesToBeOCRedDropped files ->
+            let
+                admissibleFiles : List Encode.Value
+                admissibleFiles =
+                    files
+                        |> List.filter
+                            (\file ->
+                                case decodeFile file of
+                                    Just f ->
+                                        List.member (File.mime f) [ "image/png", "image/jpeg", "application/pdf" ]
+
+                                    Nothing ->
+                                        False
+                            )
+
+                newIds : List Int
+                newIds =
+                    List.range (model.lastListingsId + 1) (model.lastListingsId + List.length admissibleFiles)
+
+                newListings : OCRListings
+                newListings =
+                    List.map2
+                        (\value id ->
+                            let
+                                t =
+                                    case decodeFile value of
+                                        Just f ->
+                                            f |> File.name |> removeFileExtension
+
+                                        Nothing ->
+                                            ""
+                            in
+                            { id = id
+                            , file = value
+                            , title = t
+                            , progress = 0
+                            }
+                        )
+                        admissibleFiles
+                        newIds
+
+                ocrListingFiles : List OCRListingFile
+                ocrListingFiles =
+                    List.map (\l -> OCRListingFile l.id l.file) newListings
+            in
+            ( { model
+                | ocrListings = List.append model.ocrListings newListings
+                , lastListingsId = model.lastListingsId + List.length newListings
+              }
+            , ocrTheseDocuments ocrListingFiles
+            )
+
+        OCRItemsDeleteButtonClicked id ->
+            ( { model | ocrListings = List.filter (\l -> l.id /= id) model.ocrListings }, Cmd.none )
+
 
 encodeListings : Listings -> Encode.Value
 encodeListings listings =
@@ -623,6 +771,9 @@ port getThePageCountOfThePDF : Encode.Value -> Cmd msg
 
 
 port generateADocument : Encode.Value -> Cmd msg
+
+
+port ocrTheseDocuments : List OCRListingFile -> Cmd msg
 
 
 
